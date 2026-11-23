@@ -266,9 +266,10 @@ function OrderModal({customers,drivers,onClose,onDone,onError}:{customers:Custom
   const [notes,setNotes]=useState(""); const [driverId,setDriverId]=useState("");
   const [itemName,setItemName]=useState(""); const [brand,setBrand]=useState(""); const [size,setSize]=useState("");
   const [quantity,setQuantity]=useState("1"); const [weight,setWeight]=useState("medium"); const [itemNotes,setItemNotes]=useState("");
+  const [latitude,setLatitude]=useState<number|null>(null);const [longitude,setLongitude]=useState<number|null>(null);
   const [busy,setBusy]=useState(false);
   const chosen=customers.find(c=>c.id===customerId);
-  function chooseCustomer(id:string){setCustomerId(id);const c=customers.find(x=>x.id===id);if(c){setFullName(c.full_name);setAddress(c.address);}}
+  function chooseCustomer(id:string){setCustomerId(id);const c=customers.find(x=>x.id===id);if(c){setFullName(c.full_name);setPhone(c.phone||"");setAddress(c.address);setLatitude(c.latitude??null);setLongitude(c.longitude??null);}else{setFullName("");setPhone("");setAddress("");setLatitude(null);setLongitude(null);}}
   async function submit(e:FormEvent){
     e.preventDefault();
     if(!fullName.trim()||!phone.trim()||!address.trim()||!itemName.trim()){
@@ -290,7 +291,7 @@ function OrderModal({customers,drivers,onClose,onDone,onError}:{customers:Custom
     try{
       const {error}=await supabase.rpc("seller_create_order",{
         p_customer_id:customerId||null,p_full_name:fullName.trim(),p_address:address.trim(),p_phone:phone.trim(),
-        p_latitude:null,p_longitude:null,p_freight_toman:Number(freight||0),p_cash_balance_toman:Number(cash||0),
+        p_latitude:latitude,p_longitude:longitude,p_freight_toman:Number(freight||0),p_cash_balance_toman:Number(cash||0),
         p_checks_total_toman:Number(checksTotal||0),p_checks_count:Number(checksCount||0),p_seller_notes:notes.trim()||null,
         p_items:[{mattress_name:itemName.trim(),brand:brand.trim()||null,size:size.trim()||null,quantity:Number(quantity),weight,notes:itemNotes.trim()||null}],
         p_driver_id:driverId||null
@@ -302,7 +303,7 @@ function OrderModal({customers,drivers,onClose,onDone,onError}:{customers:Custom
   return <Modal title="ثبت سفارش جدید" onClose={onClose}><form className="form-grid" onSubmit={submit}>
     <label className="full">مشتری قبلی (اختیاری)<select value={customerId} onChange={e=>chooseCustomer(e.target.value)}><option value="">ثبت مشتری جدید</option>{customers.map(c=><option key={c.id} value={c.id}>{c.full_name} — {c.address}</option>)}</select></label>
     <Field label="نام مشتری" value={fullName} set={setFullName} required/><Field label="شماره تماس" value={phone} set={setPhone} required/>
-    <label className="full">آدرس تحویل<textarea value={address} onChange={e=>setAddress(e.target.value)} required rows={2}/></label>
+    <label className="full">آدرس تحویل<textarea value={address} onChange={e=>setAddress(e.target.value)} required rows={2}/></label><div className="full"><MapPicker latitude={latitude} longitude={longitude} onChange={(lat,lng)=>{setLatitude(lat);setLongitude(lng);}}/></div>
     <div className="full divider-label">مشخصات کالا</div><Field label="نام تشک" value={itemName} set={setItemName} required/><Field label="برند" value={brand} set={setBrand}/>
     <Field label="سایز" value={size} set={setSize}/><Field label="تعداد" value={quantity} set={setQuantity} type="number" required/>
     <label>وزن کالا<select value={weight} onChange={e=>setWeight(e.target.value)}><option value="light">سبک</option><option value="medium">متوسط</option><option value="heavy">سنگین</option></select></label>
