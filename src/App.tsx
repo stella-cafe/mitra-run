@@ -201,7 +201,15 @@ function SellerPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
       for (const r of [o,d,c,ch]) if (r.error) throw r.error;
       const allLedger = await fetchAllLedger();
       setOrders((o.data||[]) as Order[]); setDrivers((d.data||[]) as Driver[]);
-      setCustomers((c.data||[]) as Customer[]); setChecks((ch.data||[]) as Check[]); setLedger(allLedger);
+      const customerRows=(c.data||[]) as Customer[];
+      if(customerRows.length){
+        const phones=await supabase.from("customer_phones").select("customer_id,phone,is_primary").in("customer_id",customerRows.map(x=>x.id)).order("is_primary",{ascending:false});
+        if(phones.error)throw phones.error;
+        const primary=new Map<string,string>();
+        for(const p of phones.data||[])if(!primary.has(p.customer_id))primary.set(p.customer_id,p.phone);
+        setCustomers(customerRows.map(x=>({...x,phone:primary.get(x.id)||null})));
+      }else setCustomers([]);
+      setChecks((ch.data||[]) as Check[]); setLedger(allLedger);
       const checkIds=(ch.data||[]).map((x:any)=>x.id);
       if(checkIds.length){const ph=await supabase.from("check_photos").select("id,check_id,storage_path,expires_at,deleted_at").in("check_id",checkIds).is("deleted_at",null);if(ph.error)throw ph.error;const grouped:Record<string,string[]>={};for(const x of ph.data||[]){if(x.expires_at && new Date(x.expires_at)<new Date())continue;const signed=await supabase.storage.from("mitra-private").createSignedUrl(x.storage_path,1800);if(!signed.error&&signed.data?.signedUrl)(grouped[x.check_id]??=[]).push(signed.data.signedUrl);}setCheckPhotos(grouped);}else setCheckPhotos({});
     } catch(e) { setError(e instanceof Error?e.message:"بارگذاری اطلاعات ناموفق بود."); }
