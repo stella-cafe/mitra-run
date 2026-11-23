@@ -31,3 +31,17 @@ footer{text-align:center;color:#655d6e;font-size:10px;margin-top:45px}
   .card-bottom button{flex:1}
   .nav-tabs button{font-size:11px;padding:8px 9px}
 }
+
+/* GO location search, live map and operational status colors */
+.map-search{display:flex;gap:8px;align-items:center}
+.map-search input{flex:1;min-width:0}
+.map-search button{min-width:82px;min-height:42px}
+.map-results{display:flex;flex-direction:column;gap:5px;max-height:170px;overflow:auto}
+.map-results button{text-align:right;padding:9px 11px;border:1px solid #40364c;border-radius:9px;background:#211b2a;color:#e9dff1;font-size:11px}
+.live-driver-map{height:340px}
+.status-assigned{background:#4b2630;color:#ffb2bc}
+.status-loading,.status-accepted{background:#3c3443;color:#d5c9df}
+.status-on_the_way{background:#3d3154;color:#d8c2ff}
+.status-delivered,.status-approved{background:#1d4436;color:#9be4b8}
+.status-pending_approval{background:#4b2630;color:#ffb2bc}
+@media(max-width:480px){.map-search{flex-direction:column;align-items:stretch}.map-search button{width:100%}.live-driver-map{height:280px}}
