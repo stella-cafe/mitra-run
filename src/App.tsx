@@ -289,6 +289,19 @@ function OrderModal({customers,drivers,onClose,onDone,onError}:{customers:Custom
     }
     setBusy(true);
     try{
+      if(customerId){
+        const customerUpdate=await supabase.from("customers").update({full_name:fullName.trim(),address:address.trim(),latitude,longitude}).eq("id",customerId);
+        if(customerUpdate.error)throw customerUpdate.error;
+        const existingPhone=await supabase.from("customer_phones").select("id").eq("customer_id",customerId).order("is_primary",{ascending:false}).limit(1);
+        if(existingPhone.error)throw existingPhone.error;
+        if(existingPhone.data?.[0]){
+          const phoneUpdate=await supabase.from("customer_phones").update({phone:phone.trim(),is_primary:true}).eq("id",existingPhone.data[0].id);
+          if(phoneUpdate.error)throw phoneUpdate.error;
+        }else{
+          const phoneInsert=await supabase.from("customer_phones").insert({customer_id:customerId,phone:phone.trim(),is_primary:true});
+          if(phoneInsert.error)throw phoneInsert.error;
+        }
+      }
       const {error}=await supabase.rpc("seller_create_order",{
         p_customer_id:customerId||null,p_full_name:fullName.trim(),p_address:address.trim(),p_phone:phone.trim(),
         p_latitude:latitude,p_longitude:longitude,p_freight_toman:Number(freight||0),p_cash_balance_toman:Number(cash||0),
