@@ -616,3 +616,5 @@ begin
 end $$;
 -- Keep the driver-extra-jobs mutation surface RPC-only after the seller policy is added.
 revoke insert, update, delete on public.driver_extra_jobs from authenticated;
+
+grant select on public.profiles to authenticated;
