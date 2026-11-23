@@ -239,6 +239,8 @@ function SellerPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
     finally { setBusy(false); }
   },[setError]);
   useEffect(()=>{load();},[load]);
+  useEffect(()=>{const timer=window.setInterval(async()=>{const r=await supabase.from("driver_locations").select("driver_id,latitude,longitude,updated_at");if(!r.error)setDriverLocations((r.data||[]) as DriverLocation[]);},15000);return()=>window.clearInterval(timer);},[]);
+
 
   async function assign(order:Order,driverId:string) {
     try {
