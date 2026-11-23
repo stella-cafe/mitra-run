@@ -386,6 +386,7 @@ function MapPicker({latitude,longitude,onChange}:{latitude:number|null;longitude
   const element=useRef<HTMLDivElement|null>(null);
   const map=useRef<any>(null);
   const pin=useRef<any>(null);
+  const latest=useRef({latitude,longitude,onChange});latest.current={latitude,longitude,onChange};
   const [mapError,setMapError]=useState("");
   useEffect(()=>{
     let cancelled=false;
@@ -393,14 +394,15 @@ function MapPicker({latitude,longitude,onChange}:{latitude:number|null;longitude
       const L=(window as any).L;
       if(cancelled||!L||!element.current)return;
       if(map.current)map.current.remove();
-      const start:[number,number]=latitude!==null&&longitude!==null?[latitude,longitude]:[36.2972,59.6067];
-      map.current=L.map(element.current).setView(start,latitude!==null&&longitude!==null?16:12);
+      const current=latest.current;
+      const start:[number,number]=current.latitude!==null&&current.longitude!==null?[current.latitude,current.longitude]:[36.2972,59.6067];
+      map.current=L.map(element.current).setView(start,current.latitude!==null&&current.longitude!==null?16:12);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(map.current);
-      if(latitude!==null&&longitude!==null)pin.current=L.marker(start).addTo(map.current);
+      if(current.latitude!==null&&current.longitude!==null)pin.current=L.marker(start).addTo(map.current);
       map.current.on("click",(ev:any)=>{
         const lat=Number(ev.latlng.lat.toFixed(7)),lng=Number(ev.latlng.lng.toFixed(7));
         if(pin.current)pin.current.setLatLng([lat,lng]);else pin.current=L.marker([lat,lng]).addTo(map.current);
-        onChange(lat,lng);
+        latest.current.onChange(lat,lng);
       });
       setTimeout(()=>map.current&&map.current.invalidateSize(),120);
     };
@@ -410,7 +412,7 @@ function MapPicker({latitude,longitude,onChange}:{latitude:number|null;longitude
       if(!document.getElementById("mitra-leaflet-css")){const css=document.createElement("link");css.id="mitra-leaflet-css";css.rel="stylesheet";css.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";document.head.appendChild(css);}
       let script=document.getElementById("mitra-leaflet-js") as HTMLScriptElement|null;
       if(!script){script=document.createElement("script");script.id="mitra-leaflet-js";script.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";script.onload=init;script.onerror=()=>setMapError("نقشه بارگذاری نشد؛ اتصال اینترنت را بررسی کنید.");document.body.appendChild(script);}
-      else if(w.L)init();
+      else if(w.L)init();else script.addEventListener("load",init,{once:true});
     }
     return()=>{cancelled=true;if(map.current){map.current.remove();map.current=null;pin.current=null;}};
   },[]);
