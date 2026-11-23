@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { supabase } from "./lib/supabase";
 import type { Session } from "@supabase/supabase-js";
@@ -31,6 +31,10 @@ type Ledger = { id: string; driver_id?: string; entry_type: string; amount_toman
 type CashCollection = { id:string; order_id:string; amount_toman:number; status:string; created_at:string };
 type CustomerCheck = {id:string;order_id:string;total_amount_toman:number;check_count:number;status:string};
 
+function errorMessage(e: unknown, fallback = "عملیات ناموفق بود."): string {
+  if (e && typeof e === "object") { const x = e as { message?: unknown; details?: unknown; hint?: unknown }; const parts = [x.message,x.details,x.hint].filter(v => typeof v === "string" && v.trim()) as string[]; if(parts.length)return parts.join(" — "); }
+  return e instanceof Error ? e.message : fallback;
+}
 const money = (v?: number | null) => `${Number(v || 0).toLocaleString("fa-IR")} تومان`;
 const dateText = (v?: string) => v ? new Date(v).toLocaleString("fa-IR", { dateStyle: "short", timeStyle: "short" }) : "—";
 const statusFa: Record<string, string> = {
@@ -182,6 +186,7 @@ function SellerPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
   const [reviewing,setReviewing] = useState<Check|null>(null);
   const [settling,setSettling] = useState<Driver|null>(null);
   const [checkPhotos,setCheckPhotos] = useState<Record<string,string[]>>({});
+  const [editingOrder,setEditingOrder] = useState<Order|null>(null);
 
   const load = useCallback(async()=>{
     setBusy(true); setError("");
