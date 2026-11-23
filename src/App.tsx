@@ -23,20 +23,32 @@ export default function App() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  
+async function loadProfile(userId: string, userEmail: string) {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id,role,is_active")
+    .eq("id", userId)
+    .single();
 
-  async function loadProfile(userId: string) {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("id,email,role,is_active")
-      .eq("id", userId)
-      .single();
+  if (error) throw error;
 
-    if (error) throw error;
-    if (!data || !data.is_active) {
-      throw new Error("حساب کاربری غیرفعال است.");
-    }
+  if (!data || !data.is_active) {
+    throw new Error("حساب کاربری غیرفعال است.");
+  }
+
+  if (data.role !== "seller" && data.role !== "driver") {
+    throw new Error("نقش کاربر معتبر نیست.");
+  }
+
+  setProfile({
+    id: data.id,
+    email: userEmail,
+    role: data.role,
+    is_active: data.is_active
+  });
+}
+
 
     setProfile(data as Profile);
   }
@@ -52,7 +64,10 @@ export default function App() {
 
         if (data.session) {
           try {
-            await loadProfile(data.session.user.id);
+            await loadProfile(
+  data.session.user.id,
+  data.session.user.email ?? ""
+);
           } catch {
             await supabase.auth.signOut();
             setError("دریافت اطلاعات حساب کاربری ناموفق بود.");
@@ -95,7 +110,9 @@ export default function App() {
     }
 
     try {
-      if (data.user) await loadProfile(data.user.id);
+      if (data.user) {
+  await loadProfile(data.user.id, data.user.email ?? "");
+}
     } catch {
       await supabase.auth.signOut();
       setError("حساب کاربری فعال نیست یا نقش آن مشخص نشده است.");
