@@ -531,9 +531,7 @@ function DriverPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
   }
   async function updateItem(it:MissionItem,stage:"loaded"|"delivered"){
     try{
-      const loaded=stage==="loaded"?it.ordered_quantity:Number(it.loaded_quantity||0);
-      const delivered=stage==="delivered"?it.ordered_quantity:Number(it.delivered_quantity||0);
-      const {error}=await supabase.rpc("driver_mark_mission_item_stage",{p_mission_item_id:it.id,p_loaded_quantity:loaded,p_delivered_quantity:delivered,p_discrepancy_note:null});
+      const {error}=await supabase.rpc("driver_mark_mission_item_stage",{p_mission_item_id:it.id,p_stage:stage});
       if(error)throw error;setNotice(stage==="loaded"?"بارگیری کالا ثبت شد.":"تحویل کالا ثبت شد.");await load();
     }catch(e){setError(errorMessage(e,"ثبت عملیات کالا ناموفق بود."));}
   }
