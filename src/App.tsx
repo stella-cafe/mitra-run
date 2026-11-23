@@ -242,7 +242,7 @@ function SellerPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
     finally { setBusy(false); }
   },[setError]);
   useEffect(()=>{load();},[load]);
-  useEffect(()=>{const timer=window.setInterval(async()=>{const r=await supabase.from("driver_locations").select("driver_id,latitude,longitude,updated_at");if(!r.error)setDriverLocations((r.data||[]) as DriverLocation[]);},15000);return()=>window.clearInterval(timer);},[]);
+  useEffect(()=>{const timer=window.setInterval(async()=>{const [r,m]=await Promise.all([supabase.from("driver_locations").select("driver_id,latitude,longitude,updated_at"),supabase.from("missions").select("order_id,status").order("created_at",{ascending:false}).limit(200)]);if(!r.error)setDriverLocations((r.data||[]) as DriverLocation[]);if(!m.error){const statusMap=new Map<string,string>();for(const x of m.data||[])if(!statusMap.has(x.order_id))statusMap.set(x.order_id,x.status);setOrders(prev=>prev.map(o=>({...o,status:statusMap.get(o.id)||o.status})));}},15000);return()=>window.clearInterval(timer);},[]);
 
 
   async function assign(order:Order,driverId:string) {
