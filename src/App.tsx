@@ -290,7 +290,7 @@ function SellerPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
 }
 
 function FreightRatePanel({setError,setNotice}:{setError:(v:string)=>void;setNotice:(v:string)=>void}) {
-  const [amount,setAmount]=useState("");const [effective,setEffective]=useState(new Date().toISOString().slice(0,16));const [rows,setRows]=useState<{id:string;amount_toman:number;effective_from:string}[]>([]);const [busy,setBusy]=useState(false);
+  const [amount,setAmount]=useState("");const [effective,setEffective]=useState(()=>{const d=new Date(Date.now()-new Date().getTimezoneOffset()*60000);return d.toISOString().slice(0,16);});const [rows,setRows]=useState<{id:string;amount_toman:number;effective_from:string}[]>([]);const [busy,setBusy]=useState(false);
   const load=useCallback(async()=>{const r=await supabase.from("driver_freight_rates").select("id,amount_toman,effective_from").order("effective_from",{ascending:false}).limit(50);if(r.error)throw r.error;setRows(r.data||[]);},[]);
   useEffect(()=>{load().catch(e=>setError(errorMessage(e,"دریافت تعرفه‌ها ناموفق بود.")));},[load,setError]);
   async function submit(e:FormEvent){e.preventDefault();const n=Number(normalizeDigits(amount));if(!Number.isFinite(n)||n<0){setError("مبلغ کرایه معتبر نیست.");return;}setBusy(true);try{const r=await supabase.from("driver_freight_rates").insert({amount_toman:n,effective_from:new Date(effective).toISOString()});if(r.error)throw r.error;setAmount("");setNotice("تعرفه جدید ذخیره شد و از تاریخ تعیین‌شده برای مسیرهای بعدی اعمال می‌شود.");await load();}catch(e){setError(errorMessage(e,"ثبت تعرفه ناموفق بود."));}finally{setBusy(false);}}
