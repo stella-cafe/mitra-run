@@ -1,5 +1,5 @@
 
-name: Verify MITRA RUN Build
+name: Verify GO Build
 
 on:
   workflow_dispatch:
