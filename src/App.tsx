@@ -481,15 +481,26 @@ function DriverPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
     finally{setBusy(false);}
   },[profile.id,setError]);
   useEffect(()=>{load();},[load]);
-  useEffect(()=>{if(!navigator.geolocation)return;navigator.geolocation.getCurrentPosition(pos=>setDriverPosition({latitude:pos.coords.latitude,longitude:pos.coords.longitude}),()=>setDriverPosition(null),{enableHighAccuracy:true,timeout:10000,maximumAge:60000});},[]);
-  const sortedMissions=useMemo(()=>{if(!driverPosition)return missions;return [...missions].sort((a,b)=>{const ca=a.customer,cb=b.customer;const da=ca?.latitude!=null&&ca?.longitude!=null?distanceKm(driverPosition,{latitude:ca.latitude,longitude:ca.longitude}):Infinity;const db=cb?.latitude!=null&&cb?.longitude!=null?distanceKm(driverPosition,{latitude:cb.latitude,longitude:cb.longitude}):Infinity;return da-db;});},[missions,driverPosition]);
+  const sortedMissions=useMemo(()=>{
+    const remaining=missions.filter(m=>m.customer?.latitude!=null&&m.customer?.longitude!=null);
+    const missing=missions.filter(m=>m.customer?.latitude==null||m.customer?.longitude==null);
+    if(remaining.length<2)return missions;
+    let current={latitude:remaining[0].customer!.latitude as number,longitude:remaining[0].customer!.longitude as number};
+    const ordered=[remaining.shift()!];
+    while(remaining.length){let best=0,bestDistance=Infinity;remaining.forEach((m,i)=>{const d=distanceKm(current,{latitude:m.customer!.latitude as number,longitude:m.customer!.longitude as number});if(d<bestDistance){best=i;bestDistance=d;}});const next=remaining.splice(best,1)[0];ordered.push(next);current={latitude:next.customer!.latitude as number,longitude:next.customer!.longitude as number};}
+    return [...ordered,...missing];
+  },[missions]);
   async function status(m:Mission,next:string,reason?:string){
     try{const {error}=await supabase.rpc("driver_update_mission_status",{p_mission_id:m.id,p_new_status:next,p_failure_reason:reason||null});if(error)throw error;setNotice("وضعیت مأموریت به‌روزرسانی شد.");await load();}
     catch(e){setError(errorMessage(e,"تغییر وضعیت ناموفق بود."));}
   }
-  async function updateItem(it:MissionItem,loaded:number,delivered:number,note:string){
-    try{const {error}=await supabase.rpc("driver_update_mission_item",{p_mission_item_id:it.id,p_loaded_quantity:loaded,p_delivered_quantity:delivered,p_discrepancy_note:note||null});if(error)throw error;setNotice("تعداد کالا به‌روزرسانی شد.");await load();}
-    catch(e){setError(errorMessage(e,"ثبت تعداد ناموفق بود."));}
+  async function updateItem(it:MissionItem,stage:"loaded"|"delivered"){
+    try{
+      const loaded=stage==="loaded"?it.ordered_quantity:Number(it.loaded_quantity||0);
+      const delivered=stage==="delivered"?it.ordered_quantity:Number(it.delivered_quantity||0);
+      const {error}=await supabase.rpc("driver_update_mission_item",{p_mission_item_id:it.id,p_loaded_quantity:loaded,p_delivered_quantity:delivered,p_discrepancy_note:null});
+      if(error)throw error;setNotice(stage==="loaded"?"بارگیری کالا ثبت شد.":"تحویل کالا ثبت شد.");await load();
+    }catch(e){setError(errorMessage(e,"ثبت عملیات کالا ناموفق بود."));}
   }
   async function complete(m:Mission,freightCollected:boolean){
     try{const {error}=await supabase.rpc("driver_complete_mission",{p_mission_id:m.id,p_freight_collected:freightCollected});if(error)throw error;setNotice("اتمام مأموریت ثبت شد.");await load();}
