@@ -187,6 +187,7 @@ function SellerPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
   const [settling,setSettling] = useState<Driver|null>(null);
   const [checkPhotos,setCheckPhotos] = useState<Record<string,string[]>>({});
   const [editingOrder,setEditingOrder] = useState<Order|null>(null);
+  const [editingOrder,setEditingOrder] = useState<Order|null>(null);
 
   const load = useCallback(async()=>{
     setBusy(true); setError("");
@@ -194,7 +195,7 @@ function SellerPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
       const [o,d,c,ch] = await Promise.all([
         supabase.from("orders").select("*").order("created_at",{ascending:false}).limit(100),
         supabase.from("profiles").select("id,full_name,phone").eq("role","driver").eq("is_active",true),
-        supabase.from("customers").select("id,full_name,address,notes").eq("is_archived",false).order("full_name"),
+        supabase.from("customers").select("id,full_name,address,notes,latitude,longitude").eq("is_archived",false).order("full_name"),
         supabase.from("customer_checks").select("*").order("created_at",{ascending:false}).limit(100)
       ]);
       for (const r of [o,d,c,ch]) if (r.error) throw r.error;
