@@ -5,7 +5,7 @@ import type { Session } from "@supabase/supabase-js";
 import {
   Truck, LogOut, Package, Users, ClipboardList, Loader2, Plus,
   RefreshCw, CheckCircle2, Clock3, MapPin, Wallet, FileCheck,
-  ChevronLeft, X, Warehouse, AlertCircle
+  ChevronLeft, X, Warehouse, AlertCircle, Eye, EyeOff
 } from "lucide-react";
 
 type Role = "seller" | "driver";
@@ -62,8 +62,19 @@ async function fetchAllLedger(driverId?: string): Promise<Ledger[]> {
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() => {
+    try { return localStorage.getItem("mitra_run_email") || ""; }
+    catch { return ""; }
+  });
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => {
+    try {
+      if (email.trim()) localStorage.setItem("mitra_run_email", email.trim());
+      else localStorage.removeItem("mitra_run_email");
+    } catch (e) { console.warn("Could not persist login email", e); }
+  }, [email]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -131,7 +142,7 @@ export default function App() {
     <div className="brand-icon"><Truck size={34}/></div><h1>MITRA RUN</h1>
     <p className="subtitle">سامانه مدیریت ارسال تشک میترا</p>
     <label>ایمیل</label><input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="ایمیل حساب کاربری" autoComplete="username" required/>
-    <label>رمز عبور</label><input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="رمز عبور" autoComplete="current-password" required/>
+    <label>رمز عبور</label><div style={{display:"flex",gap:8,alignItems:"center"}}><input style={{flex:1}} type={showPassword?"text":"password"} value={password} onChange={e=>setPassword(e.target.value)} placeholder="رمز عبور" autoComplete="current-password" required/><button type="button" className="icon-button" aria-label={showPassword?"پنهان کردن رمز عبور":"نمایش رمز عبور"} onClick={()=>setShowPassword(v=>!v)}>{showPassword?<EyeOff size={18}/>:<Eye size={18}/>}</button></div>
     {error && <div className="error">{error}</div>}
     <button className="primary-button" disabled={busy}>{busy ? "در حال ورود..." : "ورود به سامانه"}</button>
     <span className="version">MITRA RUN • VERSION 1.1</span>
