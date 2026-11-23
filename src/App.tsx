@@ -243,6 +243,7 @@ function SellerPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
     {tab==="customers"&&<><SectionTitle title="مشتریان" sub={`${customers.length.toLocaleString("fa-IR")} مشتری ثبت‌شده`}/><div className="stack">{customers.map(c=><div className="data-card compact" key={c.id}><strong>{c.full_name}</strong><p>{c.address}</p>{c.notes&&<small>{c.notes}</small>}</div>)}{!customers.length&&<Empty text="مشتری‌ای ثبت نشده است."/>}</div></>}
     {showOrder&&<OrderModal customers={customers} drivers={drivers} onClose={()=>setShowOrder(false)} onDone={async()=>{setShowOrder(false);setNotice("سفارش با موفقیت ثبت شد.");await load();}} onError={setError}/>}
     {assigning&&<AssignModal order={assigning} drivers={drivers} onClose={()=>setAssigning(null)} onAssign={assign}/>}
+    {editingOrder&&<EditOrderModal order={editingOrder} customers={customers} onClose={()=>setEditingOrder(null)} onDone={async()=>{setEditingOrder(null);setNotice("اطلاعات سفارش اصلاح شد.");await load();}} onError={setError}/>}
     {reviewing&&<ReviewModal check={reviewing} photos={checkPhotos[reviewing.id]||[]} onClose={()=>setReviewing(null)} onSubmit={review}/>}
     {settling&&<SettlementModal driver={settling} onClose={()=>setSettling(null)} onSubmit={(amount,note)=>settle(settling,amount,note)}/> }
     {busy&&<div className="inline-loading"><Loader2 className="spin" size={16}/> در حال بروزرسانی…</div>}
@@ -312,6 +313,41 @@ function OrderModal({customers,drivers,onClose,onDone,onError}:{customers:Custom
     <div className="modal-actions full"><button type="button" className="secondary-button" onClick={onClose}>انصراف</button><button className="primary-button" disabled={busy}>{busy?"در حال ثبت…":"ثبت سفارش"}</button></div>
   </form></Modal>;
 }
+
+function EditOrderModal({order,customers,onClose,onDone,onError}:{order:Order;customers:Customer[];onClose:()=>void;onDone:()=>void;onError:(v:string)=>void}) {
+  const customer=customers.find(c=>c.id===order.customer_id);
+  const [name,setName]=useState(customer?.full_name||"");
+  const [phone,setPhone]=useState(customer?.phone||"");
+  const [address,setAddress]=useState(customer?.address||"");
+  const [freight,setFreight]=useState(String(order.freight_toman||0));
+  const [cash,setCash]=useState(String(order.customer_cash_balance_toman||0));
+  const [notes,setNotes]=useState(order.seller_notes||"");
+  const [itemName,setItemName]=useState("");
+  const [itemId,setItemId]=useState("");
+  const [quantity,setQuantity]=useState("1");
+  const [busy,setBusy]=useState(false);
+  useEffect(()=>{let alive=true;(async()=>{const q=await supabase.from("order_items").select("id,mattress_name,quantity").eq("order_id",order.id).order("created_at",{ascending:true});if(q.error){onError(errorMessage(q.error,"دریافت اقلام سفارش ناموفق بود."));return;}if(alive&&q.data?.[0]){setItemId(q.data[0].id);setItemName(q.data[0].mattress_name);setQuantity(String(q.data[0].quantity));}})();return()=>{alive=false;};},[order.id]);
+  async function save(e:FormEvent){e.preventDefault();if(!customer){onError("مشتری این سفارش پیدا نشد.");return;}if(!name.trim()||!phone.trim()||!address.trim()||!itemName.trim()){onError("نام مشتری، تلفن، آدرس و نام تشک الزامی است.");return;}if(!/^0?9\\d{9}$/.test(phone.replace(/[\\s-]/g,""))){onError("شماره تماس معتبر وارد کنید.");return;}if(!Number.isInteger(Number(quantity))||Number(quantity)<1){onError("تعداد باید عدد صحیح و مثبت باشد.");return;}if([freight,cash].some(v=>!Number.isFinite(Number(v))||Number(v)<0)){onError("مبالغ نامعتبر است.");return;}
+    setBusy(true);try{
+      const cu=await supabase.from("customers").update({full_name:name.trim(),address:address.trim()}).eq("id",customer.id);if(cu.error)throw cu.error;
+      const q=await supabase.from("customer_phones").select("id").eq("customer_id",customer.id).order("is_primary",{ascending:false}).limit(1);if(q.error)throw q.error;
+      if(q.data?.[0]){const ph=await supabase.from("customer_phones").update({phone:phone.trim(),is_primary:true}).eq("id",q.data[0].id);if(ph.error)throw ph.error;}else{const ph=await supabase.from("customer_phones").insert({customer_id:customer.id,phone:phone.trim(),is_primary:true});if(ph.error)throw ph.error;}
+      const up=await supabase.from("orders").update({freight_toman:Number(freight),customer_cash_balance_toman:Number(cash),seller_notes:notes.trim()||null}).eq("id",order.id);if(up.error)throw up.error;
+      if(itemId){const it=await supabase.from("order_items").update({mattress_name:itemName.trim(),quantity:Number(quantity)}).eq("id",itemId);if(it.error)throw it.error;}
+      onDone();
+    }catch(e){onError(errorMessage(e,"ویرایش سفارش ناموفق بود."));}finally{setBusy(false);}
+  }
+  return <Modal title={`ویرایش سفارش #${order.order_number}`} onClose={onClose}><form className="form-grid" onSubmit={save}>
+    <Field label="نام مشتری" value={name} set={setName} required/><Field label="شماره تماس" value={phone} set={setPhone} required/>
+    <label className="full">آدرس کامل<textarea rows={2} value={address} onChange={e=>setAddress(e.target.value)} required/></label>
+    <div className="full divider-label">مشخصات سفارش</div><Field label="نام تشک" value={itemName} set={setItemName} required/><Field label="تعداد" value={quantity} set={setQuantity} type="number" required/>
+    <Field label="کرایه" value={freight} set={setFreight} type="number"/><Field label="مانده نقدی" value={cash} set={setCash} type="number"/>
+    <label className="full">توضیحات فروشنده<textarea rows={2} value={notes} onChange={e=>setNotes(e.target.value)}/></label>
+    <p className="muted full">ویرایش مالی سفارش‌های دارای تراکنش ممکن است به محدودیت‌های امنیتی دیتابیس برخورد کند. سوابق دفتر راننده حذف نمی‌شوند.</p>
+    <div className="modal-actions full"><button type="button" className="secondary-button" onClick={onClose}>انصراف</button><button className="primary-button" disabled={busy}>{busy?"در حال ذخیره…":"ذخیره تغییرات"}</button></div>
+  </form></Modal>;
+}
+
 function Field({label,value,set,type="text",required=false}:{label:string;value:string;set:(v:string)=>void;type?:string;required?:boolean}){return <label>{label}<input type={type} min={type==="number"?"0":undefined} value={value} onChange={e=>set(e.target.value)} required={required}/></label>;}
 function AssignModal({order,drivers,onClose,onAssign}:{order:Order;drivers:Driver[];onClose:()=>void;onAssign:(o:Order,id:string)=>void}) {
   const [id,setId]=useState(drivers[0]?.id||"");
