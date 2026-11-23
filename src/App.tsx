@@ -255,7 +255,22 @@ function OrderModal({customers,drivers,onClose,onDone,onError}:{customers:Custom
   const chosen=customers.find(c=>c.id===customerId);
   function chooseCustomer(id:string){setCustomerId(id);const c=customers.find(x=>x.id===id);if(c){setFullName(c.full_name);setAddress(c.address);}}
   async function submit(e:FormEvent){
-    e.preventDefault();if(!itemName.trim()){onError("نام کالا را وارد کنید.");return;}
+    e.preventDefault();
+    if(!fullName.trim()||!phone.trim()||!address.trim()||!itemName.trim()){
+      onError("برای ثبت سفارش، نام مشتری، شماره تماس، آدرس کامل و نام تشک الزامی است.");return;
+    }
+    if(!/^0?9\d{9}$/.test(phone.replace(/[\s-]/g,""))){
+      onError("شماره تماس معتبر وارد کنید.");return;
+    }
+    if(!Number.isInteger(Number(quantity))||Number(quantity)<1){
+      onError("تعداد کالا باید عدد صحیح و حداقل ۱ باشد.");return;
+    }
+    if([freight,cash,checksTotal,checksCount].some(v=>!Number.isFinite(Number(v))||Number(v)<0)){
+      onError("مبالغ و تعداد چک نمی‌توانند منفی یا نامعتبر باشند.");return;
+    }
+    if((Number(checksTotal)>0)!==(Number(checksCount)>0)){
+      onError("برای چک، هم مبلغ و هم تعداد را وارد کنید.");return;
+    }
     setBusy(true);
     try{
       const {error}=await supabase.rpc("seller_create_order",{
@@ -401,7 +416,7 @@ function MissionModal({mission,items,checks,userId,onClose,onStatus,onUpdateItem
     {items.map(it=>{const v=draft[it.id]||{loaded:String(it.loaded_quantity??0),delivered:String(it.delivered_quantity??0),note:it.discrepancy_note||""};return <div className="item-edit" key={it.id}><b>{it.item?.mattress_name||"کالای سفارش"}</b><small>{[it.item?.brand,it.item?.size,weightFa[it.item?.weight||""]].filter(Boolean).join(" · ")}</small><span>تعداد سفارش: {it.ordered_quantity.toLocaleString("fa-IR")}</span><div className="inline-fields"><label>بارگیری<input type="number" min="0" max={it.ordered_quantity} value={v.loaded} onChange={e=>setDraft(d=>({...d,[it.id]:{...v,loaded:e.target.value}}))}/></label><label>تحویل<input type="number" min="0" max={it.ordered_quantity} value={v.delivered} onChange={e=>setDraft(d=>({...d,[it.id]:{...v,delivered:e.target.value}}))}/></label></div><label>توضیح مغایرت<input value={v.note} onChange={e=>setDraft(d=>({...d,[it.id]:{...v,note:e.target.value}}))}/></label><button className="small-button" onClick={()=>onUpdateItem(it,Number(v.loaded),Number(v.delivered),v.note)}>ثبت تعداد</button></div>;})}
     {checks.length>0&&<div className="detail-box"><b>تصاویر چک مشتری</b>{checks.map(c=><div key={c.id} className="item-edit"><span>{c.check_count.toLocaleString("fa-IR")} فقره · {money(c.total_amount_toman)} · {statusFa[c.status]||c.status}</span>{c.status==="awaiting_driver"&&<label>بارگذاری تصویر چک<input type="file" accept="image/*,.pdf" disabled={uploading} onChange={e=>{const f=e.target.files?.[0];if(f)uploadCheck(c.id,f);e.currentTarget.value="";}}/></label>}</div>)}</div>}
     {mission.status==="on_the_way"&&<div className="detail-box"><b>مدرک تحویل</b><label>بارگذاری عکس تحویل یا رسید<input type="file" accept="image/*,.pdf" disabled={uploading} onChange={e=>{const f=e.target.files?.[0];if(f)uploadDelivery(f);e.currentTarget.value="";}}/></label>{uploading&&<small>در حال بارگذاری…</small>}</div>}
-    {stages[mission.status]&&<button className="primary-button" onClick={()=>onStatus(mission,stages[mission.status].next)}>{stages[mission.status].label}</button>}
+    {stages[mission.status]&&<><button className="primary-button" disabled={mission.status==="loading"&&(items.length===0||!items.every(i=>Number(i.loaded_quantity||0)===i.ordered_quantity))} onClick={()=>onStatus(mission,stages[mission.status].next)}>{stages[mission.status].label}</button>{mission.status==="loading"&&(items.length===0||!items.every(i=>Number(i.loaded_quantity||0)===i.ordered_quantity))&&<small className="muted">برای حرکت به سمت مشتری، ابتدا تعداد بارگیری هر قلم را ثبت کنید و مطمئن شوید با تعداد سفارش برابر است.</small>}</>}
     {mission.status==="on_the_way"&&<><label className="check-line"><input type="checkbox" checked={freightCollected} onChange={e=>setFreightCollected(e.target.checked)}/> کرایه از مشتری دریافت شد</label><button className="primary-button" disabled={!canComplete} onClick={()=>onComplete(mission,freightCollected)}>ثبت اتمام مأموریت</button><small className="muted">برای اتمام، تعداد بارگیری و تحویل همه اقلام باید با تعداد سفارش برابر باشد. دریافت وجه نقد مشتری از بخش مربوط به وجه نقد در فهرست مأموریت‌ها تأیید می‌شود.</small></>}
     {["accepted","loading","on_the_way"].includes(mission.status)&&<div className="failure-box"><label>ثبت عدم انجام مأموریت / علت شکست<textarea value={reason} onChange={e=>setReason(e.target.value)} rows={2}/></label><button className="danger-button" disabled={!reason.trim()} onClick={()=>onStatus(mission,"failed",reason)}>ثبت مأموریت ناموفق</button></div>}
     <div className="modal-actions"><button className="secondary-button" onClick={onClose}>بستن</button></div>
