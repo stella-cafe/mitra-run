@@ -231,13 +231,14 @@ function SellerPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
   async function deleteOrder(order:Order){
     if(order.status!=="registered"){setError("فقط سفارش ثبت‌شده و ارجاع‌نشده قابل حذف است.");return;}
     try{
-      const [m,c,cc]=await Promise.all([
+      const [m,c,cc,l]=await Promise.all([
         supabase.from("missions").select("id").eq("order_id",order.id).limit(1),
         supabase.from("customer_checks").select("id").eq("order_id",order.id).limit(1),
-        supabase.from("cash_collections").select("id").eq("order_id",order.id).limit(1)
+        supabase.from("cash_collections").select("id").eq("order_id",order.id).limit(1),
+        supabase.from("driver_ledger").select("id").eq("order_id",order.id).limit(1)
       ]);
-      for(const x of [m,c,cc])if(x.error)throw x.error;
-      if((m.data?.length||0)||(c.data?.length||0)||(cc.data?.length||0))throw new Error("این سفارش سابقه مأموریت، چک یا دریافت وجه دارد و برای حفظ سوابق مالی حذف نمی‌شود.");
+      for(const x of [m,c,cc,l])if(x.error)throw x.error;
+      if((m.data?.length||0)||(c.data?.length||0)||(cc.data?.length||0)||(l.data?.length||0))throw new Error("این سفارش سابقه مأموریت، چک، دریافت وجه یا تراکنش دفتر راننده دارد و برای حفظ سوابق مالی حذف نمی‌شود.");
       const itemsDelete=await supabase.from("order_items").delete().eq("order_id",order.id);if(itemsDelete.error)throw itemsDelete.error;
       const orderDelete=await supabase.from("orders").delete().eq("id",order.id);if(orderDelete.error)throw orderDelete.error;
       setNotice("سفارش حذف شد.");await load();
