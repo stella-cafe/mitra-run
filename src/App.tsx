@@ -214,9 +214,9 @@ function SellerPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
       if(customerRows.length){
         const phones=await supabase.from("customer_phones").select("customer_id,phone,is_primary").in("customer_id",customerRows.map(x=>x.id)).order("is_primary",{ascending:false});
         if(phones.error)throw phones.error;
-        const primary=new Map<string,string>();
-        for(const p of phones.data||[])if(!primary.has(p.customer_id))primary.set(p.customer_id,p.phone);
-        setCustomers(customerRows.map(x=>({...x,phone:primary.get(x.id)||null})));
+        const phoneMap=new Map<string,string[]>();
+        for(const p of phones.data||[]){const list=phoneMap.get(p.customer_id)||[];if(!list.includes(p.phone)&&list.length<2)list.push(p.phone);phoneMap.set(p.customer_id,list);}
+        setCustomers(customerRows.map(x=>({...x,phone:phoneMap.get(x.id)?.[0]||null,phone2:phoneMap.get(x.id)?.[1]||null})));
       }else setCustomers([]);
       setChecks((ch.data||[]) as Check[]); setLedger(allLedger);
       const checkIds=(ch.data||[]).map((x:any)=>x.id);
@@ -465,11 +465,9 @@ function DriverPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
         ]) : [{data:[],error:null},{data:[],error:null}];
         if(customerResult.error)throw customerResult.error;
         if(phoneResult.error)throw phoneResult.error;
-        const primaryPhones = new Map<string,string>();
-        for (const p of phoneResult.data || []) {
-          if (!primaryPhones.has(p.customer_id)) primaryPhones.set(p.customer_id,p.phone);
-        }
-        const customerMap=new Map((customerResult.data||[]).map((x:any)=>[x.id,{...x,phone:primaryPhones.get(x.id)||null}]));
+        const phoneMap = new Map<string,string[]>();
+        for (const p of phoneResult.data || []) { const list=phoneMap.get(p.customer_id)||[];if(!list.includes(p.phone)&&list.length<2)list.push(p.phone);phoneMap.set(p.customer_id,list); }
+        const customerMap=new Map((customerResult.data||[]).map((x:any)=>[x.id,{...x,phone:phoneMap.get(x.id)?.[0]||null,phone2:phoneMap.get(x.id)?.[1]||null}]));
         const itemsRaw=(mi.data||[]) as MissionItem[];
         const itemIds=[...new Set(itemsRaw.map(x=>x.order_item_id))];
         let itemMap=new Map<string,any>();
