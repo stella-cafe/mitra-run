@@ -348,14 +348,14 @@ function OrderModal({customers,drivers,onClose,onDone,onError}:{customers:Custom
 function EditOrderModal({order,customers,onClose,onDone,onError}:{order:Order;customers:Customer[];onClose:()=>void;onDone:()=>void;onError:(v:string)=>void}) {
   const customer=customers.find(c=>c.id===order.customer_id);
   const [name,setName]=useState(customer?.full_name||"");
-  const [phone,setPhone]=useState(customer?.phone||"");
+  const [phone,setPhone]=useState(customer?.phone||"");const [phone2,setPhone2]=useState(customer?.phone2||"");
   const [address,setAddress]=useState(customer?.address||"");
   const [latitude,setLatitude]=useState<number|null>(customer?.latitude??null);const [longitude,setLongitude]=useState<number|null>(customer?.longitude??null);
   const [notes,setNotes]=useState(order.seller_notes||"");
   const [orderItems,setOrderItems]=useState<{id:string;name:string;quantity:string}[]>([]);
   const [busy,setBusy]=useState(false);
   useEffect(()=>{let alive=true;(async()=>{const q=await supabase.from("order_items").select("id,mattress_name,quantity").eq("order_id",order.id).order("created_at",{ascending:true});if(q.error){onError(errorMessage(q.error,"دریافت اقلام سفارش ناموفق بود."));return;}if(alive&&q.data?.length){setOrderItems(q.data.map(x=>({id:x.id,name:x.mattress_name,quantity:String(x.quantity)})));}})();return()=>{alive=false;};},[order.id]);
-  async function save(e:FormEvent){e.preventDefault();if(!customer){onError("مشتری این سفارش پیدا نشد.");return;}if(!name.trim()||!phone.trim()||!address.trim()||!orderItems.length||orderItems.some(x=>!x.name.trim())){onError("نام مشتری، تلفن، آدرس و نام تشک الزامی است.");return;}if(!/^0?9\d{9}$/.test(phone.replace(/[\s-]/g,""))){onError("شماره تماس معتبر وارد کنید.");return;}if(orderItems.some(x=>!Number.isInteger(Number(x.quantity))||Number(x.quantity)<1)){onError("تعداد هر قلم باید عدد صحیح و مثبت باشد.");return;}
+  async function save(e:FormEvent){e.preventDefault();if(!customer){onError("مشتری این سفارش پیدا نشد.");return;}if(!name.trim()||!phone.trim()||!address.trim()||!orderItems.length||orderItems.some(x=>!x.name.trim())){onError("نام مشتری، تلفن، آدرس و نام تشک الزامی است.");return;}if(!validIranPhone(phone)||(phone2.trim()&&!validIranPhone(phone2))){onError("شماره تماس را با فرمت ۰۹۱۲۳۴۵۶۷۸۹ وارد کنید.");return;}if(orderItems.some(x=>!Number.isInteger(Number(x.quantity))||Number(x.quantity)<1)){onError("تعداد هر قلم باید عدد صحیح و مثبت باشد.");return;}
     setBusy(true);try{
       const cu=await supabase.from("customers").update({full_name:name.trim(),address:address.trim(),latitude,longitude}).eq("id",customer.id);if(cu.error)throw cu.error;
       const q=await supabase.from("customer_phones").select("id").eq("customer_id",customer.id).order("is_primary",{ascending:false}).limit(1);if(q.error)throw q.error;
@@ -366,7 +366,7 @@ function EditOrderModal({order,customers,onClose,onDone,onError}:{order:Order;cu
     }catch(e){onError(errorMessage(e,"ویرایش سفارش ناموفق بود."));}finally{setBusy(false);}
   }
   return <Modal title={`ویرایش سفارش #${order.order_number}`} onClose={onClose}><form className="form-grid" onSubmit={save}>
-    <Field label="نام مشتری" value={name} set={setName} required/><Field label="شماره تماس" value={phone} set={setPhone} required/>
+    <Field label="نام مشتری" value={name} set={setName} required/><Field label="شماره تماس اول" value={phone} set={setPhone} required/><Field label="شماره تماس دوم (اختیاری)" value={phone2} set={setPhone2}/>
     <label className="full">آدرس کامل<textarea rows={2} value={address} onChange={e=>setAddress(e.target.value)} required/></label><div className="full"><MapPicker latitude={latitude} longitude={longitude} onChange={(a,b)=>{setLatitude(a);setLongitude(b);}}/></div>
     <div className="full divider-label">مشخصات اقلام سفارش</div>{orderItems.map((item,index)=><div className="full inline-fields" key={item.id}><Field label={"نام تشک "+(index+1)} value={item.name} set={v=>setOrderItems(rows=>rows.map(x=>x.id===item.id?{...x,name:v}:x))} required/><Field label="تعداد" value={item.quantity} set={v=>setOrderItems(rows=>rows.map(x=>x.id===item.id?{...x,quantity:v}:x))} type="number" required/></div>)}
     
