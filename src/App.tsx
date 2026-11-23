@@ -35,6 +35,12 @@ function errorMessage(e: unknown, fallback = "عملیات ناموفق بود."
   if (e && typeof e === "object") { const x = e as { message?: unknown; details?: unknown; hint?: unknown }; const parts = [x.message,x.details,x.hint].filter(v => typeof v === "string" && v.trim()) as string[]; if(parts.length)return parts.join(" — "); }
   return e instanceof Error ? e.message : fallback;
 }
+const distanceKm = (a:{latitude:number;longitude:number},b:{latitude:number;longitude:number}) => {
+  const rad=(v:number)=>v*Math.PI/180;
+  const dLat=rad(b.latitude-a.latitude),dLon=rad(b.longitude-a.longitude);
+  const h=Math.sin(dLat/2)**2+Math.cos(rad(a.latitude))*Math.cos(rad(b.latitude))*Math.sin(dLon/2)**2;
+  return 6371*2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h));
+};
 const money = (v?: number | null) => `${Number(v || 0).toLocaleString("fa-IR")} تومان`;
 const dateText = (v?: string) => v ? new Date(v).toLocaleString("fa-IR", { dateStyle: "short", timeStyle: "short" }) : "—";
 const statusFa: Record<string, string> = {
