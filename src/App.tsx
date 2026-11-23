@@ -227,7 +227,11 @@ function SellerPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
   useEffect(()=>{load();},[load]);
 
   async function assign(order:Order,driverId:string) {
-    try { const {error}=await supabase.rpc("seller_assign_order",{p_order_id:order.id,p_driver_id:driverId}); if(error) throw error;
+    try {
+      const rate=await supabase.from("driver_freight_rates").select("amount_toman").lte("effective_from",new Date().toISOString()).order("effective_from",{ascending:false}).limit(1).maybeSingle();
+      if(rate.error)throw rate.error;
+      if(rate.data){const snapshot=await supabase.from("orders").update({driver_freight_toman:rate.data.amount_toman}).eq("id",order.id);if(snapshot.error)throw snapshot.error;}
+      const {error}=await supabase.rpc("seller_assign_order",{p_order_id:order.id,p_driver_id:driverId}); if(error) throw error;
       setNotice("سفارش با موفقیت به راننده ارجاع شد."); setAssigning(null); await load();
     } catch(e){setError(errorMessage(e,"ارجاع سفارش ناموفق بود."));}
   }
@@ -248,6 +252,12 @@ function SellerPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
     }catch(e){setError(errorMessage(e,"حذف سفارش ناموفق بود."));}
   }
 
+  async function archiveCustomer(customer:Customer){
+    if(!window.confirm("مشتری «"+customer.full_name+"» از فهرست فعال حذف شود؟ سوابق سفارش‌ها حفظ می‌شوند."))return;
+    try{const r=await supabase.from("customers").update({is_archived:true}).eq("id",customer.id);if(r.error)throw r.error;setNotice("مشتری از فهرست فعال بایگانی شد.");await load();}
+    catch(e){setError(errorMessage(e,"حذف مشتری ناموفق بود."));}
+  }
+
   async function review(check:Check,approved:boolean,note:string) {
     try {const {error}=await supabase.rpc("seller_review_check",{p_check_id:check.id,p_approved:approved,p_note:note||null});if(error)throw error;
       setNotice(approved?"چک تأیید شد.":"چک رد شد.");setReviewing(null);await load();
@@ -256,7 +266,7 @@ function SellerPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
 
   async function settle(driver:Driver,amount:number,note:string){try{const {error}=await supabase.rpc("seller_settle_driver",{p_driver_id:driver.id,p_amount_toman:amount,p_note:note||null,p_receipt_path:null});if(error)throw error;setNotice("تسویه راننده با موفقیت ثبت شد.");setSettling(null);await load();}catch(e){setError(errorMessage(e,"ثبت تسویه ناموفق بود."));}}
 
-  const nav=[{id:"home",label:"نمای کلی",icon:<ClipboardList size={17}/>},{id:"orders",label:"سفارش‌ها",icon:<Package size={17}/>},{id:"checks",label:"چک‌ها",icon:<FileCheck size={17}/>},{id:"finance",label:"مالی رانندگان",icon:<Wallet size={17}/>},{id:"customers",label:"مشتریان",icon:<Users size={17}/>}];
+  const nav=[{id:"home",label:"نمای کلی",icon:<ClipboardList size={17}/>},{id:"orders",label:"سفارش‌ها",icon:<Package size={17}/>},{id:"checks",label:"چک‌ها",icon:<FileCheck size={17}/>},{id:"finance",label:"مالی رانندگان",icon:<Wallet size={17}/>},{id:"customers",label:"مشتریان",icon:<Users size={17}/>},{id:"rates",label:"تعرفه مسیر",icon:<Wallet size={17}/>}];
   const openOrders=orders.filter(o=>!["delivered","partially_delivered","failed","cancelled"].includes(o.status));
   return <>
     <Nav tab={tab} setTab={setTab} items={nav}/>
