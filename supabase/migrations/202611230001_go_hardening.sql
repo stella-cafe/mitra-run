@@ -535,3 +535,68 @@ create policy go_driver_read_assigned_orders on public.orders
 for select to authenticated using (
   exists (select 1 from public.missions m where m.order_id=orders.id and m.driver_id=auth.uid())
 );
+
+
+-- Harden the extra-job write surface: drivers submit/complete through the RPCs only.
+revoke insert, update, delete on public.driver_extra_jobs from authenticated;
+drop policy if exists go_driver_extra_jobs_insert on public.driver_extra_jobs;
+drop policy if exists go_driver_extra_jobs_update on public.driver_extra_jobs;
+
+-- A store-funded round trip was explicitly authorized by the seller, so credit it
+-- when the driver marks it complete. Third-party warehouse expenses stay pending.
+create or replace function public.go_driver_complete_extra_job(p_job_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare v_job public.driver_extra_jobs%rowtype;
+begin
+  select * into v_job from public.driver_extra_jobs
+  where id=p_job_id and driver_id=auth.uid() and status='assigned'
+  for update;
+  if not found then raise exception 'این مأموریت ویژه در دسترس یا قابل ثبت نیست.'; end if;
+
+  if v_job.job_type='store_round_trip' then
+    update public.driver_extra_jobs
+    set status='approved', completed_at=now(), reviewed_at=now(),
+        review_note='از قبل توسط فروشنده به‌عنوان هزینه فروشگاه تأیید شده است.'
+    where id=p_job_id;
+    insert into public.driver_ledger
+      (driver_id,entry_type,amount_toman,description,created_by,extra_job_id)
+    values
+      (v_job.driver_id,'adjustment',v_job.amount_toman,
+       'GO_EXTRA_JOB:'||v_job.id::text||': '||v_job.title,auth.uid(),v_job.id)
+    on conflict (extra_job_id) where extra_job_id is not null do nothing;
+  else
+    update public.driver_extra_jobs
+    set status='pending_approval', completed_at=now()
+    where id=p_job_id;
+  end if;
+end;
+$$;
+revoke all on function public.go_driver_complete_extra_job(uuid) from public;
+grant execute on function public.go_driver_complete_extra_job(uuid) to authenticated;
+
+-- Sellers can inspect active drivers' profiles without granting profile/role edits.
+drop policy if exists go_seller_read_profiles on public.profiles;
+create policy go_seller_read_profiles on public.profiles
+for select to authenticated using (public.go_is_active_seller());
+
+-- Driver reads are scoped to orders assigned to their own missions.
+drop policy if exists go_driver_read_assigned_checks on public.customer_checks;
+create policy go_driver_read_assigned_checks on public.customer_checks
+for select to authenticated using (
+  exists (
+    select 1 from public.missions m
+    where m.order_id=customer_checks.order_id and m.driver_id=auth.uid()
+  )
+);
+drop policy if exists go_driver_read_assigned_cash on public.cash_collections;
+create policy go_driver_read_assigned_cash on public.cash_collections
+for select to authenticated using (
+  exists (
+    select 1 from public.missions m
+    where m.order_id=cash_collections.order_id and m.driver_id=auth.uid()
+  )
+);
