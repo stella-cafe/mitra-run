@@ -413,6 +413,7 @@ function DriverPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
   const [ledger,setLedger]=useState<Ledger[]>([]); const [cashCollections,setCashCollections]=useState<CashCollection[]>([]); const [checksByOrder,setChecksByOrder]=useState<Record<string,CustomerCheck[]>>({}); const [busy,setBusy]=useState(false);
   const [visitOpen,setVisitOpen]=useState(false); const [activeMission,setActiveMission]=useState<string|null>(null);
   const [contactsOpen,setContactsOpen]=useState(false);
+  const [driverPosition,setDriverPosition]=useState<{latitude:number;longitude:number}|null>(null);
   const load=useCallback(async()=>{
     setBusy(true);setError("");
     try{
@@ -454,6 +455,8 @@ function DriverPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
     finally{setBusy(false);}
   },[profile.id,setError]);
   useEffect(()=>{load();},[load]);
+  useEffect(()=>{if(!navigator.geolocation)return;navigator.geolocation.getCurrentPosition(pos=>setDriverPosition({latitude:pos.coords.latitude,longitude:pos.coords.longitude}),()=>setDriverPosition(null),{enableHighAccuracy:true,timeout:10000,maximumAge:60000});},[]);
+  const sortedMissions=useMemo(()=>{if(!driverPosition)return missions;return [...missions].sort((a,b)=>{const ca=a.customer,cb=b.customer;const da=ca?.latitude!=null&&ca?.longitude!=null?distanceKm(driverPosition,{latitude:ca.latitude,longitude:ca.longitude}):Infinity;const db=cb?.latitude!=null&&cb?.longitude!=null?distanceKm(driverPosition,{latitude:cb.latitude,longitude:cb.longitude}):Infinity;return da-db;});},[missions,driverPosition]);
   async function status(m:Mission,next:string,reason?:string){
     try{const {error}=await supabase.rpc("driver_update_mission_status",{p_mission_id:m.id,p_new_status:next,p_failure_reason:reason||null});if(error)throw error;setNotice("وضعیت مأموریت به‌روزرسانی شد.");await load();}
     catch(e){setError(e instanceof Error?e.message:"تغییر وضعیت ناموفق بود.");}
@@ -471,7 +474,7 @@ function DriverPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
   return <><Nav tab={tab} setTab={setTab} items={nav}/>
     {tab==="home"&&<><div className="stats-grid"><Stat label="کل مأموریت‌ها" value={missions.length}/><Stat label="فعال" value={missions.filter(m=>!["delivered","failed","cancelled"].includes(m.status)).length}/><Stat label="تکمیل‌شده" value={missions.filter(m=>m.status==="delivered").length}/><Stat label="مانده حساب (تومان)" value={ledger.reduce((s,x)=>s+x.amount_toman,0)}/></div>
       <SectionTitle title="مأموریت‌های من" sub="برای مشاهده جزئیات، هر مأموریت را باز کنید" action={<><button className="small-button" onClick={load}><RefreshCw size={15}/> بروزرسانی</button><button className="primary-small" onClick={()=>setVisitOpen(true)}><Warehouse size={15}/> مراجعه به انبار</button></>}/>
-      <div className="stack">{cashCollections.map(c=><div className="data-card" key={c.id}><div className="card-top"><strong>وجه نقد سفارش #{c.order_id.slice(0,8)}</strong><b>{money(c.amount_toman)}</b></div><button className="primary-small" onClick={()=>markCash(c)}>تأیید دریافت وجه</button></div>)}{missions.map(m=><MissionCard key={m.id} mission={m} items={items[m.id]||[]} onOpen={()=>setActiveMission(m.id)}/>)}
+      <div className="stack">{cashCollections.map(c=><div className="data-card" key={c.id}><div className="card-top"><strong>وجه نقد سفارش #{c.order_id.slice(0,8)}</strong><b>{money(c.amount_toman)}</b></div><button className="primary-small" onClick={()=>markCash(c)}>تأیید دریافت وجه</button></div>)}{sortedMissions.map(m=><MissionCard key={m.id} mission={m} items={items[m.id]||[]} onOpen={()=>setActiveMission(m.id)}/>)}
       {!missions.length&&<Empty text="در حال حاضر مأموریتی به شما ارجاع نشده است."/>}</div>
       {activeMission&&<MissionModal mission={missions.find(m=>m.id===activeMission)!} items={items[activeMission]||[]} checks={checksByOrder[missions.find(m=>m.id===activeMission)!.order_id]||[]} userId={profile.id} onClose={()=>setActiveMission(null)} onStatus={status} onUpdateItem={updateItem} onComplete={complete} onError={setError} onNotice={setNotice}/>}
       {visitOpen&&<WarehouseModal userId={profile.id} onClose={()=>setVisitOpen(false)} onDone={()=>{setVisitOpen(false);setNotice("مراجعه به انبار ثبت و به حساب شما اضافه شد.");load();}} onError={setError}/>}
