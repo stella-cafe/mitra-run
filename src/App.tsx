@@ -378,10 +378,10 @@ function EditOrderModal({order,customers,onClose,onDone,onError}:{order:Order;cu
     setBusy(true);try{
       const cu=await supabase.from("customers").update({full_name:name.trim(),address:address.trim(),latitude,longitude}).eq("id",customer.id);if(cu.error)throw cu.error;
       const q=await supabase.from("customer_phones").select("id").eq("customer_id",customer.id).order("is_primary",{ascending:false});if(q.error)throw q.error;
-      const phoneValues=[normalizePhone(phone),normalizePhone(phone2)].filter(Boolean);
-      for(let i=0;i<2;i++){const row=q.data?.[i],value=phoneValues[i];if(row&&value){const ph=await supabase.from("customer_phones").update({phone:value,is_primary:i===0}).eq("id",row.id);if(ph.error)throw ph.error;}else if(row&&!value){const ph=await supabase.from("customer_phones").delete().eq("id",row.id);if(ph.error)throw ph.error;}else if(!row&&value){const ph=await supabase.from("customer_phones").insert({customer_id:customer.id,phone:value,is_primary:i===0});if(ph.error)throw ph.error;}}
+      const values=[normalizePhone(phone),normalizePhone(phone2)].filter(Boolean);
+      for(let i=0;i<2;i++){const row=q.data?.[i],value=values[i];if(row&&value){const ph=await supabase.from("customer_phones").update({phone:value,is_primary:i===0}).eq("id",row.id);if(ph.error)throw ph.error;}else if(row&&!value){const ph=await supabase.from("customer_phones").delete().eq("id",row.id);if(ph.error)throw ph.error;}else if(!row&&value){const ph=await supabase.from("customer_phones").insert({customer_id:customer.id,phone:value,is_primary:i===0});if(ph.error)throw ph.error;}}
       const up=await supabase.from("orders").update({seller_notes:notes.trim()||null}).eq("id",order.id);if(up.error)throw up.error;
-      for(const item of orderItems){const it=await supabase.from("order_items").update({mattress_name:item.name.trim(),quantity:Number(item.quantity)}).eq("id",item.id);if(it.error)throw it.error;}
+      for(const item of orderItems){const it=await supabase.from("order_items").update({mattress_name:item.name.trim(),quantity:Number(normalizeDigits(item.quantity))}).eq("id",item.id);if(it.error)throw it.error;}
       onDone();
     }catch(e){onError(errorMessage(e,"ویرایش سفارش ناموفق بود."));}finally{setBusy(false);}
   }
