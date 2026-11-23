@@ -212,17 +212,20 @@ function SellerPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
   const load = useCallback(async()=>{
     setBusy(true); setError("");
     try {
-      const [o,d,c,ch,extraJobsResult,driverLocationsResult] = await Promise.all([
+      const [o,d,c,ch,extraJobsResult,driverLocationsResult,missionResult] = await Promise.all([
         supabase.from("orders").select("*").order("created_at",{ascending:false}).limit(100),
         supabase.from("profiles").select("id,full_name,phone").eq("role","driver").eq("is_active",true),
         supabase.from("customers").select("id,full_name,address,notes,latitude,longitude,created_at,is_archived").order("full_name"),
         supabase.from("customer_checks").select("*").order("created_at",{ascending:false}).limit(100),
         supabase.from("driver_extra_jobs").select("*").order("created_at",{ascending:false}).limit(100),
-        supabase.from("driver_locations").select("driver_id,latitude,longitude,updated_at")
+        supabase.from("driver_locations").select("driver_id,latitude,longitude,updated_at"),
+        supabase.from("missions").select("id,order_id,status,created_at,driver_id").order("created_at",{ascending:false}).limit(200)
       ]);
-      for (const r of [o,d,c,ch,extraJobsResult,driverLocationsResult]) if (r.error) throw r.error;
+      for (const r of [o,d,c,ch,extraJobsResult,driverLocationsResult,missionResult]) if (r.error) throw r.error;
       const allLedger = await fetchAllLedger();
-      setOrders((o.data||[]) as Order[]); setDrivers((d.data||[]) as Driver[]);
+      const missionStatusByOrder=new Map<string,string>();
+      for(const m of missionResult.data||[])missionStatusByOrder.set(m.order_id,m.status);
+      setOrders(((o.data||[]) as Order[]).map(order=>({...order,status:missionStatusByOrder.get(order.id)||order.status}))); setDrivers((d.data||[]) as Driver[]);
       setExtraJobs((extraJobsResult.data||[]) as ExtraJob[]); setDriverLocations((driverLocationsResult.data||[]) as DriverLocation[]);
       const customerRows=(c.data||[]) as Customer[];
       if(customerRows.length){
