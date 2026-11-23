@@ -315,7 +315,7 @@ function Stat({label,value}:{label:string;value:number}) {return <div className=
 function Status({value}:{value:string}) {return <span className={`status status-${value}`}>{statusFa[value]||value}</span>;}
 function OrderList({orders,onAssign,onEdit,onDelete}:{orders:Order[];onAssign:(o:Order)=>void;onEdit:(o:Order)=>void;onDelete:(o:Order)=>void}) {
   return <div className="stack">{orders.map(o=><div className="data-card" key={o.id}><div className="card-top"><strong>سفارش #{o.order_number.toLocaleString("fa-IR")}</strong><Status value={o.status}/></div>
-    <div className="card-grid"><span>شناسه مشتری: {o.customer_id.slice(0,8)}</span><span>کرایه: {money(o.freight_toman)}</span><span>مانده نقدی: {money(o.customer_cash_balance_toman)}</span><span>چک: {money(o.checks_total_toman)}</span></div>
+    <div className="card-grid"><span>شناسه مشتری: {o.customer_id.slice(0,8)}</span><span>کرایه مشتری: {money(o.freight_toman)}</span><span>کرایه راننده: {money(o.driver_freight_toman)}</span><span>مانده نقدی: {money(o.customer_cash_balance_toman)}</span><span>چک: {money(o.checks_total_toman)}</span></div>
     {o.seller_notes&&<p>{o.seller_notes}</p>}<div className="card-bottom"><small>{dateText(o.created_at)}</small><><button className="small-button" onClick={()=>onEdit(o)}>ویرایش سفارش</button>{o.status==="registered"&&<><button className="small-button" onClick={()=>onAssign(o)}>ارجاع به راننده <ChevronLeft size={15}/></button><button className="danger-button" onClick={()=>{if(window.confirm("سفارش ثبت‌شده حذف شود؟ این عملیات قابل بازگشت نیست."))onDelete(o);}}>حذف</button></>}</></div></div>)}
     {!orders.length&&<Empty text="سفارشی برای نمایش وجود ندارد."/>}</div>;
 }
@@ -475,7 +475,7 @@ function DriverPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
   const [missions,setMissions]=useState<Mission[]>([]); const [items,setItems]=useState<Record<string,MissionItem[]>>({});
   const [ledger,setLedger]=useState<Ledger[]>([]); const [cashCollections,setCashCollections]=useState<CashCollection[]>([]); const [cashBusy,setCashBusy]=useState<string|null>(null); const [checksByOrder,setChecksByOrder]=useState<Record<string,CustomerCheck[]>>({}); const [busy,setBusy]=useState(false);
   const [visitOpen,setVisitOpen]=useState(false); const [activeMission,setActiveMission]=useState<string|null>(null);
-  const [contactsOpen,setContactsOpen]=useState(false);
+  const [contactsOpen,setContactsOpen]=useState(false);const [positionOpen,setPositionOpen]=useState(false);
   const [driverPosition,setDriverPosition]=useState<{latitude:number;longitude:number}|null>(null);
   const load=useCallback(async()=>{
     setBusy(true);setError("");
@@ -520,11 +520,11 @@ function DriverPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
     const remaining=missions.filter(m=>m.customer?.latitude!=null&&m.customer?.longitude!=null);
     const missing=missions.filter(m=>m.customer?.latitude==null||m.customer?.longitude==null);
     if(remaining.length<2)return missions;
-    let current={latitude:remaining[0].customer!.latitude as number,longitude:remaining[0].customer!.longitude as number};
+    let current=driverPosition||{latitude:remaining[0].customer!.latitude as number,longitude:remaining[0].customer!.longitude as number};
     const ordered=[remaining.shift()!];
     while(remaining.length){let best=0,bestDistance=Infinity;remaining.forEach((m,i)=>{const d=distanceKm(current,{latitude:m.customer!.latitude as number,longitude:m.customer!.longitude as number});if(d<bestDistance){best=i;bestDistance=d;}});const next=remaining.splice(best,1)[0];ordered.push(next);current={latitude:next.customer!.latitude as number,longitude:next.customer!.longitude as number};}
     return [...ordered,...missing];
-  },[missions]);
+  },[missions,driverPosition]);
   async function status(m:Mission,next:string,reason?:string){
     try{const {error}=await supabase.rpc("driver_update_mission_status",{p_mission_id:m.id,p_new_status:next,p_failure_reason:reason||null});if(error)throw error;setNotice("وضعیت مأموریت به‌روزرسانی شد.");await load();}
     catch(e){setError(errorMessage(e,"تغییر وضعیت ناموفق بود."));}
@@ -545,11 +545,11 @@ function DriverPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
   const nav=[{id:"home",label:"مأموریت‌ها",icon:<Truck size={17}/>},{id:"finance",label:"حساب من",icon:<Wallet size={17}/>}];
   return <><Nav tab={tab} setTab={setTab} items={nav}/>
     {tab==="home"&&<><div className="stats-grid"><Stat label="کل مأموریت‌ها" value={missions.length}/><Stat label="فعال" value={missions.filter(m=>!["delivered","failed","cancelled"].includes(m.status)).length}/><Stat label="تکمیل‌شده" value={missions.filter(m=>m.status==="delivered").length}/><Stat label="مانده حساب (تومان)" value={ledger.reduce((s,x)=>s+x.amount_toman,0)}/></div>
-      <SectionTitle title="مأموریت‌های من" sub="برای مشاهده جزئیات، هر مأموریت را باز کنید" action={<><button className="small-button" onClick={load}><RefreshCw size={15}/> بروزرسانی</button><button className="primary-small" onClick={()=>setVisitOpen(true)}><Warehouse size={15}/> مراجعه به انبار</button></>}/>
+      <SectionTitle title="مأموریت‌های من" sub="مبدأ را روی نقشه مشخص کنید تا مسیرها بر اساس نزدیک‌ترین نشانی مرتب شوند." action={<><button className="small-button" onClick={()=>setPositionOpen(true)}><MapPin size={15}/> تعیین مبدأ</button><button className="small-button" onClick={load}><RefreshCw size={15}/> بروزرسانی</button><button className="primary-small" onClick={()=>setVisitOpen(true)}><Warehouse size={15}/> مراجعه به انبار</button></>}/>
       <div className="stack">{cashCollections.map(c=><div className="data-card" key={c.id}><div className="card-top"><strong>وجه نقد سفارش #{c.order_id.slice(0,8)}</strong><b>{money(c.amount_toman)}</b></div><button className="primary-small" disabled={cashBusy===c.id} onClick={()=>markCash(c)}>{cashBusy===c.id?"در حال ثبت…":"تأیید دریافت وجه"}</button></div>)}{sortedMissions.map(m=><MissionCard key={m.id} mission={m} items={items[m.id]||[]} onOpen={()=>setActiveMission(m.id)}/>)}
       {!missions.length&&<Empty text="در حال حاضر مأموریتی به شما ارجاع نشده است."/>}</div>
       {activeMission&&<MissionModal mission={missions.find(m=>m.id===activeMission)!} items={items[activeMission]||[]} checks={checksByOrder[missions.find(m=>m.id===activeMission)!.order_id]||[]} pendingCash={cashCollections.filter(c=>c.order_id===missions.find(m=>m.id===activeMission)!.order_id)} userId={profile.id} onClose={()=>setActiveMission(null)} onStatus={status} onUpdateItem={updateItem} onComplete={complete} onError={setError} onNotice={setNotice}/>}
-      {visitOpen&&<WarehouseModal userId={profile.id} onClose={()=>setVisitOpen(false)} onDone={()=>{setVisitOpen(false);setNotice("مراجعه به انبار ثبت و به حساب شما اضافه شد.");load();}} onError={setError}/>}
+      {positionOpen&&<Modal title="تعیین موقعیت شروع مسیر" onClose={()=>setPositionOpen(false)}><div className="form-stack"><p className="muted">نقطه شروع خود را روی نقشه لمس کنید؛ نشانی‌های تگ‌شده از نزدیک‌ترین به دورترین مرتب می‌شوند.</p><MapPicker latitude={driverPosition?.latitude??null} longitude={driverPosition?.longitude??null} onChange={(latitude,longitude)=>setDriverPosition({latitude,longitude})}/><button className="primary-button" disabled={!driverPosition} onClick={()=>setPositionOpen(false)}>ثبت مبدأ مسیر</button></div></Modal>}{visitOpen&&<WarehouseModal userId={profile.id} onClose={()=>setVisitOpen(false)} onDone={()=>{setVisitOpen(false);setNotice("مراجعه به انبار ثبت و به حساب شما اضافه شد.");load();}} onError={setError}/>}
     </>}
     {tab==="finance"&&<><SectionTitle title="حساب راننده" sub="گردش حساب و کرایه‌های ثبت‌شده"/><div className="balance-card"><span>مانده حساب</span><strong>{money(ledger.reduce((s,x)=>s+x.amount_toman,0))}</strong></div><div className="stack">{ledger.map(x=><div className="data-card compact" key={x.id}><div className="card-top"><strong>{ledgerLabel(x.entry_type)}</strong><b className={x.amount_toman<0?"negative":"positive"}>{money(x.amount_toman)}</b></div><p>{x.description||"—"}</p><small>{dateText(x.created_at)}</small></div>)}{!ledger.length&&<Empty text="تراکنشی ثبت نشده است."/>}</div></>}
     {busy&&<div className="inline-loading"><Loader2 className="spin" size={16}/> در حال بروزرسانی…</div>}
