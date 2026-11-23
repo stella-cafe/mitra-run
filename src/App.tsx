@@ -492,7 +492,7 @@ function DriverPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
   const [ledger,setLedger]=useState<Ledger[]>([]); const [cashCollections,setCashCollections]=useState<CashCollection[]>([]); const [cashBusy,setCashBusy]=useState<string|null>(null); const [checksByOrder,setChecksByOrder]=useState<Record<string,CustomerCheck[]>>({}); const [busy,setBusy]=useState(false);
   const [visitOpen,setVisitOpen]=useState(false); const [activeMission,setActiveMission]=useState<string|null>(null);
   const [contactsOpen,setContactsOpen]=useState(false);const [positionOpen,setPositionOpen]=useState(false);
-  const [driverPosition,setDriverPosition]=useState<{latitude:number;longitude:number}|null>(null);const locationWatch=useRef<number|null>(null);
+  const [driverPosition,setDriverPosition]=useState<{latitude:number;longitude:number}|null>(null);const locationWatch=useRef<number|null>(null);const locationNotified=useRef(false);
   const load=useCallback(async()=>{
     setBusy(true);setError("");
     try{
@@ -546,7 +546,7 @@ function DriverPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
     while(remaining.length){let best=0,bestDistance=Infinity;remaining.forEach((m,i)=>{const d=distanceKm(current,{latitude:m.customer!.latitude as number,longitude:m.customer!.longitude as number});if(d<bestDistance){best=i;bestDistance=d;}});const next=remaining.splice(best,1)[0];ordered.push(next);current={latitude:next.customer!.latitude as number,longitude:next.customer!.longitude as number};}
     return [...ordered,...missing];
   },[missions,driverPosition]);
-  async function saveCurrentLocation(){if(!navigator.geolocation){setError("مکان‌یابی در این مرورگر پشتیبانی نمی‌شود.");return;}if(locationWatch.current!==null)navigator.geolocation.clearWatch(locationWatch.current);locationWatch.current=navigator.geolocation.watchPosition(async pos=>{const point={latitude:pos.coords.latitude,longitude:pos.coords.longitude};setDriverPosition(point);const r=await supabase.from("driver_locations").upsert({driver_id:profile.id,latitude:point.latitude,longitude:point.longitude,updated_at:new Date().toISOString()},{onConflict:"driver_id"});if(r.error)setError(errorMessage(r.error,"ذخیره موقعیت راننده ناموفق بود."));else setNotice("موقعیت فعلی شما برای فروشنده ثبت و به‌روزرسانی شد.");},err=>setError("دریافت موقعیت ناموفق بود: "+err.message),{enableHighAccuracy:true,timeout:20000,maximumAge:10000});}
+  async function saveCurrentLocation(){if(!navigator.geolocation){setError("مکان‌یابی در این مرورگر پشتیبانی نمی‌شود.");return;}if(locationWatch.current!==null)navigator.geolocation.clearWatch(locationWatch.current);locationNotified.current=false;setNotice("ردیابی موقعیت شما فعال شد؛ نقطه آبی پنل فروشنده به‌روزرسانی می‌شود.");locationWatch.current=navigator.geolocation.watchPosition(async pos=>{const point={latitude:pos.coords.latitude,longitude:pos.coords.longitude};setDriverPosition(point);const r=await supabase.from("driver_locations").upsert({driver_id:profile.id,latitude:point.latitude,longitude:point.longitude,updated_at:new Date().toISOString()},{onConflict:"driver_id"});if(r.error&&!locationNotified.current){locationNotified.current=true;setError(errorMessage(r.error,"ذخیره موقعیت راننده ناموفق بود."));}},err=>setError("دریافت موقعیت ناموفق بود: "+err.message),{enableHighAccuracy:true,timeout:20000,maximumAge:10000});}
   useEffect(()=>()=>{if(locationWatch.current!==null)navigator.geolocation.clearWatch(locationWatch.current);},[]);
   async function completeExtraJob(job:ExtraJob){try{const {error}=await supabase.rpc("go_driver_complete_extra_job",{p_job_id:job.id});if(error)throw error;setNotice("انجام مسیر ویژه برای تأیید فروشنده ارسال شد.");await load();}catch(e){setError(errorMessage(e,"ثبت پایان مسیر ویژه ناموفق بود."));}}
   async function status(m:Mission,next:string,reason?:string){
@@ -559,7 +559,7 @@ function DriverPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
       if(error)throw error;setNotice(stage==="loaded"?"بارگیری کالا ثبت شد.":"خدا قوت ای مرد ❤️");await load();
     }catch(e){setError(errorMessage(e,"ثبت عملیات کالا ناموفق بود."));}
   }
-  async function confirmCheck(c:CustomerCheck){try{const {error}=await supabase.rpc("driver_confirm_customer_check",{p_check_id:c.id});if(error)throw error;setNotice("تأیید چک برای بررسی فروشنده ارسال شد.");await load();}catch(e){setError(errorMessage(e,"تأیید چک ناموفق بود."));}}
+  async async function confirmCheck(c:CustomerCheck){try{const {error}=await supabase.rpc("driver_confirm_customer_check",{p_check_id:c.id});if(error)throw error;setNotice("تأیید چک برای بررسی فروشنده ارسال شد.");await load();}catch(e){setError(errorMessage(e,"تأیید چک ناموفق بود."));}}
   async function complete(m:Mission,freightCollected:boolean){
     try{const {error}=await supabase.rpc("driver_complete_mission",{p_mission_id:m.id,p_freight_collected:freightCollected});if(error)throw error;setNotice("اتمام مأموریت ثبت شد.");await load();}
     catch(e){setError(errorMessage(e,"اتمام مأموریت ناموفق بود."));}
