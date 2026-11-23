@@ -423,6 +423,7 @@ function MapPicker({latitude,longitude,onChange}:{latitude:number|null;longitude
     const init=()=>{
       const L=(window as any).L;
       if(cancelled||!L||!element.current)return;
+      if(L.Icon?.Default){delete L.Icon.Default.prototype._getIconUrl;L.Icon.Default.mergeOptions({iconRetinaUrl:"https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",iconUrl:"https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",shadowUrl:"https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png"});}
       if(map.current)map.current.remove();
       const current=latest.current;
       const start:[number,number]=current.latitude!==null&&current.longitude!==null?[current.latitude,current.longitude]:[36.2972,59.6067];
