@@ -173,3 +173,67 @@ drop trigger if exists go_credit_driver_route_fee_trigger on public.missions;
 create trigger go_credit_driver_route_fee_trigger
 after update of status on public.missions
 for each row execute function public.go_credit_driver_route_fee();
+
+
+-- Safer one-tap loading/delivery RPC: avoids ambiguous quantity payloads from mobile forms.
+create or replace function public.driver_mark_mission_item_stage(
+  p_mission_item_id uuid,
+  p_stage text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_ordered integer;
+  v_loaded integer;
+  v_status text;
+begin
+  if not exists (
+    select 1 from public.profiles p
+    where p.id = auth.uid() and p.role::text = 'driver' and p.is_active = true
+  ) then
+    raise exception 'حساب راننده فعال نیست.';
+  end if;
+
+  select mi.ordered_quantity, coalesce(mi.loaded_quantity, 0), m.status::text
+    into v_ordered, v_loaded, v_status
+  from public.mission_items mi
+  join public.missions m on m.id = mi.mission_id
+  where mi.id = p_mission_item_id and m.driver_id = auth.uid()
+  for update of mi;
+
+  if not found then
+    raise exception 'قلم مأموریت برای این راننده پیدا نشد.';
+  end if;
+
+  if p_stage = 'loaded' then
+    if v_status <> 'loading' then
+      raise exception 'ثبت بارگیری فقط در مرحله بارگیری مجاز است.';
+    end if;
+    update public.mission_items
+      set loaded_quantity = v_ordered,
+          discrepancy_note = null,
+          checked_at = now()
+    where id = p_mission_item_id;
+  elsif p_stage = 'delivered' then
+    if v_status <> 'on_the_way' then
+      raise exception 'ثبت تحویل فقط در مرحله حرکت به سمت مشتری مجاز است.';
+    end if;
+    if v_loaded <> v_ordered then
+      raise exception 'ابتدا باید بارگیری کامل این کالا ثبت شود.';
+    end if;
+    update public.mission_items
+      set delivered_quantity = v_ordered,
+          discrepancy_note = null,
+          checked_at = now()
+    where id = p_mission_item_id;
+  else
+    raise exception 'مرحله درخواستی معتبر نیست.';
+  end if;
+end;
+$$;
+
+revoke all on function public.driver_mark_mission_item_stage(uuid, text) from public;
+grant execute on function public.driver_mark_mission_item_stage(uuid, text) to authenticated;
