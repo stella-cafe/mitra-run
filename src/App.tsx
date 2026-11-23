@@ -286,6 +286,14 @@ function SellerPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
   </>;
 }
 
+function FreightRatePanel({setError,setNotice}:{setError:(v:string)=>void;setNotice:(v:string)=>void}) {
+  const [amount,setAmount]=useState("");const [effective,setEffective]=useState(new Date().toISOString().slice(0,16));const [rows,setRows]=useState<{id:string;amount_toman:number;effective_from:string}[]>([]);const [busy,setBusy]=useState(false);
+  const load=useCallback(async()=>{const r=await supabase.from("driver_freight_rates").select("id,amount_toman,effective_from").order("effective_from",{ascending:false}).limit(50);if(r.error)throw r.error;setRows(r.data||[]);},[]);
+  useEffect(()=>{load().catch(e=>setError(errorMessage(e,"دریافت تعرفه‌ها ناموفق بود.")));},[load,setError]);
+  async function submit(e:FormEvent){e.preventDefault();const n=Number(normalizeDigits(amount));if(!Number.isFinite(n)||n<0){setError("مبلغ کرایه معتبر نیست.");return;}setBusy(true);try{const r=await supabase.from("driver_freight_rates").insert({amount_toman:n,effective_from:new Date(effective).toISOString()});if(r.error)throw r.error;setAmount("");setNotice("تعرفه جدید ذخیره شد و از تاریخ تعیین‌شده برای مسیرهای بعدی اعمال می‌شود.");await load();}catch(e){setError(errorMessage(e,"ثبت تعرفه ناموفق بود."));}finally{setBusy(false);}}
+  return <><SectionTitle title="تعرفه کرایه راننده" sub="هر تعرفه از تاریخ و ساعت شروع، روی مأموریت‌هایی که از آن زمان به بعد ارجاع می‌شوند اعمال می‌شود."/><form className="data-card form-stack" onSubmit={submit}><Field label="مبلغ کرایه هر مسیر (تومان)" value={amount} set={setAmount} type="number" required/><label>تاریخ و ساعت شروع اعمال<input type="datetime-local" value={effective} onChange={e=>setEffective(e.target.value)} required/></label><button className="primary-button" disabled={busy}>{busy?"در حال ذخیره…":"ثبت تعرفه جدید"}</button></form><SectionTitle title="سوابق تعرفه‌ها"/><div className="stack">{rows.map(r=><div className="data-card compact" key={r.id}><div className="card-top"><b>{money(r.amount_toman)}</b><small>{dateText(r.effective_from)}</small></div></div>)}{!rows.length&&<Empty text="هنوز تعرفه‌ای ثبت نشده است."/>}</div></>;
+}
+
 function Stat({label,value}:{label:string;value:number}) {return <div className="stat-card"><span>{label}</span><strong>{value.toLocaleString("fa-IR")}</strong></div>;}
 function Status({value}:{value:string}) {return <span className={`status status-${value}`}>{statusFa[value]||value}</span>;}
 function OrderList({orders,onAssign,onEdit,onDelete}:{orders:Order[];onAssign:(o:Order)=>void;onEdit:(o:Order)=>void;onDelete:(o:Order)=>void}) {
