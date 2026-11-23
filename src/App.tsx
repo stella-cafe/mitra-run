@@ -228,6 +228,22 @@ function SellerPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
       setNotice("سفارش با موفقیت به راننده ارجاع شد."); setAssigning(null); await load();
     } catch(e){setError(errorMessage(e,"ارجاع سفارش ناموفق بود."));}
   }
+  async function deleteOrder(order:Order){
+    if(order.status!=="registered"){setError("فقط سفارش ثبت‌شده و ارجاع‌نشده قابل حذف است.");return;}
+    try{
+      const [m,c,cc]=await Promise.all([
+        supabase.from("missions").select("id").eq("order_id",order.id).limit(1),
+        supabase.from("customer_checks").select("id").eq("order_id",order.id).limit(1),
+        supabase.from("cash_collections").select("id").eq("order_id",order.id).limit(1)
+      ]);
+      for(const x of [m,c,cc])if(x.error)throw x.error;
+      if((m.data?.length||0)||(c.data?.length||0)||(cc.data?.length||0))throw new Error("این سفارش سابقه مأموریت، چک یا دریافت وجه دارد و برای حفظ سوابق مالی حذف نمی‌شود.");
+      const itemsDelete=await supabase.from("order_items").delete().eq("order_id",order.id);if(itemsDelete.error)throw itemsDelete.error;
+      const orderDelete=await supabase.from("orders").delete().eq("id",order.id);if(orderDelete.error)throw orderDelete.error;
+      setNotice("سفارش حذف شد.");await load();
+    }catch(e){setError(errorMessage(e,"حذف سفارش ناموفق بود."));}
+  }
+
   async function review(check:Check,approved:boolean,note:string) {
     try {const {error}=await supabase.rpc("seller_review_check",{p_check_id:check.id,p_approved:approved,p_note:note||null});if(error)throw error;
       setNotice(approved?"چک تأیید شد.":"چک رد شد.");setReviewing(null);await load();
@@ -242,7 +258,7 @@ function SellerPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
     <Nav tab={tab} setTab={setTab} items={nav}/>
     {tab==="home"&&<><div className="stats-grid"><Stat label="کل سفارش‌ها" value={orders.length}/><Stat label="در جریان" value={openOrders.length}/><Stat label="رانندگان فعال" value={drivers.length}/><Stat label="چک‌های منتظر بررسی" value={checks.filter(c=>c.status==="awaiting_seller").length}/></div>
       <SectionTitle title="آخرین سفارش‌ها" action={<button className="small-button" onClick={load}><RefreshCw size={15}/> بروزرسانی</button>}/>
-      <OrderList orders={orders.slice(0,6)} onAssign={setAssigning} onEdit={setEditingOrder}/></>}
+      <OrderList orders={orders.slice(0,6)} onAssign={setAssigning} onEdit={setEditingOrder} onDelete={deleteOrder}/></>}
     {tab==="orders"&&<><SectionTitle title="مدیریت سفارش‌ها" sub="ثبت سفارش جدید و ارجاع به راننده" action={<button className="primary-small" onClick={()=>setShowOrder(true)}><Plus size={16}/> ثبت سفارش</button>}/><OrderList orders={orders} onAssign={setAssigning} onEdit={setEditingOrder}/></>}
     {tab==="checks"&&<><SectionTitle title="مدیریت چک‌های مشتریان" sub="چک‌های تأییدشده توسط راننده را بررسی کنید"/><div className="stack">{checks.map(c=><div className="data-card" key={c.id}><div className="card-top"><strong>سفارش #{c.order_id.slice(0,8)}</strong><Status value={c.status}/></div><p>{c.check_count.toLocaleString("fa-IR")} فقره چک · {money(c.total_amount_toman)}</p>{c.status==="awaiting_seller"&&<button className="primary-small" onClick={()=>setReviewing(c)}>بررسی مدارک</button>}{c.seller_review_note&&<small>یادداشت: {c.seller_review_note}</small>}</div>)}{!checks.length&&<Empty text="هنوز چکی ثبت نشده است."/>}</div></>}
     {tab==="finance"&&<><SectionTitle title="دفتر مالی رانندگان" sub="مانده هر راننده و ثبت تسویه"/><div className="stack">{drivers.map(d=>{const rows=ledger.filter(x=>x.driver_id===d.id);const balance=rows.reduce((sum,x)=>sum+x.amount_toman,0);return <div className="data-card" key={d.id}><div className="card-top"><strong>{d.full_name}</strong><b className={balance<0?"negative":"positive"}>{money(balance)}</b></div><small>{d.phone||"شماره تماس ثبت نشده"}</small><button className="primary-small" disabled={balance<=0} onClick={()=>setSettling(d)}>ثبت تسویه</button></div>;})}{!drivers.length&&<Empty text="راننده فعالی وجود ندارد."/>}</div><SectionTitle title="آخرین تراکنش‌ها"/><div className="stack">{ledger.slice(0,40).map(x=><div className="data-card compact" key={x.id}><div className="card-top"><strong>{ledgerLabel(x.entry_type)}</strong><b className={x.amount_toman<0?"negative":"positive"}>{money(x.amount_toman)}</b></div><p>{x.description||"بدون توضیحات"}</p><small>{dateText(x.created_at)}</small></div>)}</div></>}
@@ -258,10 +274,10 @@ function SellerPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
 
 function Stat({label,value}:{label:string;value:number}) {return <div className="stat-card"><span>{label}</span><strong>{value.toLocaleString("fa-IR")}</strong></div>;}
 function Status({value}:{value:string}) {return <span className={`status status-${value}`}>{statusFa[value]||value}</span>;}
-function OrderList({orders,onAssign,onEdit}:{orders:Order[];onAssign:(o:Order)=>void;onEdit:(o:Order)=>void}) {
+function OrderList({orders,onAssign,onEdit,onDelete}:{orders:Order[];onAssign:(o:Order)=>void;onEdit:(o:Order)=>void;onDelete:(o:Order)=>void}) {
   return <div className="stack">{orders.map(o=><div className="data-card" key={o.id}><div className="card-top"><strong>سفارش #{o.order_number.toLocaleString("fa-IR")}</strong><Status value={o.status}/></div>
     <div className="card-grid"><span>شناسه مشتری: {o.customer_id.slice(0,8)}</span><span>کرایه: {money(o.freight_toman)}</span><span>مانده نقدی: {money(o.customer_cash_balance_toman)}</span><span>چک: {money(o.checks_total_toman)}</span></div>
-    {o.seller_notes&&<p>{o.seller_notes}</p>}<div className="card-bottom"><small>{dateText(o.created_at)}</small><><button className="small-button" onClick={()=>onEdit(o)}>ویرایش سفارش</button>{o.status==="registered"&&<button className="small-button" onClick={()=>onAssign(o)}>ارجاع به راننده <ChevronLeft size={15}/></button>}</></div></div>)}
+    {o.seller_notes&&<p>{o.seller_notes}</p>}<div className="card-bottom"><small>{dateText(o.created_at)}</small><><button className="small-button" onClick={()=>onEdit(o)}>ویرایش سفارش</button>{o.status==="registered"&&<><button className="small-button" onClick={()=>onAssign(o)}>ارجاع به راننده <ChevronLeft size={15}/></button><button className="danger-button" onClick={()=>{if(window.confirm("سفارش ثبت‌شده حذف شود؟ این عملیات قابل بازگشت نیست."))onDelete(o);}}>حذف</button></>}</></div></div>)}
     {!orders.length&&<Empty text="سفارشی برای نمایش وجود ندارد."/>}</div>;
 }
 
