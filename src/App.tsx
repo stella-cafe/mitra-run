@@ -143,7 +143,7 @@ export default function App() {
   async function logout() {
     setBusy(true);
     const { error } = await supabase.auth.signOut();
-    if (error) setError(error.message);
+    if (error) { setError(error.message); setBusy(false); return; }
     setSession(null); setProfile(null); setTab("home"); setBusy(false);
   }
 
