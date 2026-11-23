@@ -600,3 +600,19 @@ for select to authenticated using (
     where m.order_id=cash_collections.order_id and m.driver_id=auth.uid()
   )
 );
+
+
+-- Additional operational tables, when present in this installation, are also seller-accessible.
+do $$
+declare t text;
+begin
+  foreach t in array array['warehouse_visits','warehouse_visit_requests','driver_locations','driver_extra_jobs'] loop
+    if to_regclass('public.'||t) is not null then
+      execute format('grant select, insert, update, delete on public.%I to authenticated',t);
+      execute format('drop policy if exists go_seller_all_modules_access on public.%I',t);
+      execute format('create policy go_seller_all_modules_access on public.%I for all to authenticated using (public.go_is_active_seller()) with check (public.go_is_active_seller())',t);
+    end if;
+  end loop;
+end $$;
+-- Keep the driver-extra-jobs mutation surface RPC-only after the seller policy is added.
+revoke insert, update, delete on public.driver_extra_jobs from authenticated;
