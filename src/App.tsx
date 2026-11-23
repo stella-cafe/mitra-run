@@ -326,7 +326,6 @@ function OrderModal({customers,drivers,onClose,onDone,onError}:{customers:Custom
   const [checksTotal,setChecksTotal]=useState("0");const [checksCount,setChecksCount]=useState("0");const [notes,setNotes]=useState("");const [driverId,setDriverId]=useState("");
   const [items,setItems]=useState<{name:string;quantity:string}[]>([{name:"",quantity:"1"}]);
   const [latitude,setLatitude]=useState<number|null>(null);const [longitude,setLongitude]=useState<number|null>(null);const [busy,setBusy]=useState(false);
-  useEffect(()=>{let alive=true;(async()=>{const r=await supabase.from("driver_freight_rates").select("amount_toman").lte("effective_from",new Date().toISOString()).order("effective_from",{ascending:false}).limit(1).maybeSingle();if(alive&&r.data)setFreight(String(r.data.amount_toman));})().catch(()=>{});return()=>{alive=false;};},[]);
   function chooseCustomer(id:string){setCustomerId(id);const c=customers.find(x=>x.id===id);if(c){setFullName(c.full_name);setPhone(c.phone||"");setPhone2(c.phone2||"");setAddress(c.address);setLatitude(c.latitude??null);setLongitude(c.longitude??null);}else{setFullName("");setPhone("");setPhone2("");setAddress("");setLatitude(null);setLongitude(null);}}
   function setItem(index:number,key:"name"|"quantity",value:string){setItems(rows=>rows.map((x,i)=>i===index?{...x,[key]:value}:x));}
   async function savePhones(customer:string){
