@@ -48,7 +48,7 @@ const normalizeDigits = (value:string) => value.replace(/[۰-۹]/g, d => String(
 const normalizePhone = (value:string) => normalizeDigits(value).replace(/[\s\-()]/g,"").replace(/^\+98/,"0").replace(/^0098/,"0");
 const validIranPhone = (value:string) => /^09\d{9}$/.test(normalizePhone(value));
 const dateText = (v?: string) => v ? new Date(v).toLocaleString("fa-IR", { dateStyle: "short", timeStyle: "short", timeZone:"Asia/Tehran", calendar:"persian" }) : "—";
-const tehranDayKey=(v:string|Date)=>{const parts=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date(v));const p=Object.fromEntries(parts.map(x=>[x.type,x.value]));return p.year+"-"+p.month+"-"+p.day;};
+const tehranDayKey=(v:string|Date)=>{const parts=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(v instanceof Date?v:new Date(v));const p=Object.fromEntries(parts.map(x=>[x.type,x.value]));return p.year+"-"+p.month+"-"+p.day;};
 const isTodayTehran=(v?:string)=>!!v&&tehranDayKey(v)===tehranDayKey(new Date());
 const tehranInputValue=()=>{const parts=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(new Date());const p=Object.fromEntries(parts.map(x=>[x.type,x.value]));return p.year+"-"+p.month+"-"+p.day+"T"+p.hour+":"+p.minute;};
 const tehranInputToIso=(v:string)=>new Date(v+":00+03:30").toISOString();
