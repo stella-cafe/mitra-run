@@ -1,0 +1,43 @@
+
+name: Verify MITRA RUN Build
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "package.json"
+      - "package-lock.json"
+      - "src/**"
+      - "vite.config.ts"
+      - ".github/workflows/verify-build.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build project
+        run: npm run build
+
+      - name: Upload build and lockfile
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mitra-run-build-files
+          path: |
+            package-lock.json
+            dist/
+          if-no-files-found: ignore
