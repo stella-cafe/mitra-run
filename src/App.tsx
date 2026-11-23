@@ -426,33 +426,21 @@ function EditOrderModal({order,customers,onClose,onDone,onError}:{order:Order;cu
 
 
 function MapPicker({latitude,longitude,onChange}:{latitude:number|null;longitude:number|null;onChange:(lat:number,lng:number)=>void}) {
-  const element=useRef<HTMLDivElement|null>(null);
-  const map=useRef<any>(null);
-  const pin=useRef<any>(null);
+  const element=useRef<HTMLDivElement|null>(null);const map=useRef<any>(null);const pin=useRef<any>(null);
   const latest=useRef({latitude,longitude,onChange});latest.current={latitude,longitude,onChange};
-  const [mapError,setMapError]=useState("");
+  const [mapError,setMapError]=useState("");const [query,setQuery]=useState("");const [searching,setSearching]=useState(false);const [results,setResults]=useState<{name:string;lat:number;lng:number}[]>([]);
   useEffect(()=>{
     let cancelled=false;
-    const init=()=>{
-      const L=(window as any).L;
-      if(cancelled||!L||!element.current)return;
+    const init=()=>{const L=(window as any).L;if(cancelled||!L||!element.current)return;
       if(L.Icon?.Default){delete L.Icon.Default.prototype._getIconUrl;L.Icon.Default.mergeOptions({iconRetinaUrl:"https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",iconUrl:"https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",shadowUrl:"https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png"});}
-      if(map.current)map.current.remove();
-      const current=latest.current;
-      const start:[number,number]=current.latitude!==null&&current.longitude!==null?[current.latitude,current.longitude]:[36.2972,59.6067];
-      map.current=L.map(element.current).setView(start,current.latitude!==null&&current.longitude!==null?16:12);
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(map.current);
-      if(current.latitude!==null&&current.longitude!==null)pin.current=L.marker(start).addTo(map.current);
-      map.current.on("click",(ev:any)=>{
-        const lat=Number(ev.latlng.lat.toFixed(7)),lng=Number(ev.latlng.lng.toFixed(7));
-        if(pin.current)pin.current.setLatLng([lat,lng]);else pin.current=L.marker([lat,lng]).addTo(map.current);
-        latest.current.onChange(lat,lng);
-      });
+      if(map.current)map.current.remove();const cur=latest.current;const start:[number,number]=cur.latitude!==null&&cur.longitude!==null?[cur.latitude,cur.longitude]:[36.2972,59.6067];
+      map.current=L.map(element.current).setView(start,cur.latitude!==null&&cur.longitude!==null?16:12);
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",{subdomains:"abcd",maxZoom:20,attribution:"© OpenStreetMap © CARTO"}).addTo(map.current);
+      if(cur.latitude!==null&&cur.longitude!==null)pin.current=L.marker(start).addTo(map.current);
+      map.current.on("click",(ev:any)=>{const lat=Number(ev.latlng.lat.toFixed(7)),lng=Number(ev.latlng.lng.toFixed(7));if(pin.current)pin.current.setLatLng([lat,lng]);else pin.current=L.marker([lat,lng]).addTo(map.current);latest.current.onChange(lat,lng);});
       setTimeout(()=>map.current&&map.current.invalidateSize(),120);
     };
-    const w=window as any;
-    if(w.L){init();}
-    else{
+    const w=window as any;if(w.L)init();else{
       if(!document.getElementById("mitra-leaflet-css")){const css=document.createElement("link");css.id="mitra-leaflet-css";css.rel="stylesheet";css.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";document.head.appendChild(css);}
       let script=document.getElementById("mitra-leaflet-js") as HTMLScriptElement|null;
       if(!script){script=document.createElement("script");script.id="mitra-leaflet-js";script.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";script.onload=init;script.onerror=()=>setMapError("نقشه بارگذاری نشد؛ اتصال اینترنت را بررسی کنید.");document.body.appendChild(script);}
@@ -460,14 +448,10 @@ function MapPicker({latitude,longitude,onChange}:{latitude:number|null;longitude
     }
     return()=>{cancelled=true;if(map.current){map.current.remove();map.current=null;pin.current=null;}};
   },[]);
-  useEffect(()=>{
-    if(map.current&&latitude!==null&&longitude!==null){
-      const L=(window as any).L;
-      if(pin.current)pin.current.setLatLng([latitude,longitude]);else pin.current=L.marker([latitude,longitude]).addTo(map.current);
-      map.current.setView([latitude,longitude],16);
-    }
-  },[latitude,longitude]);
-  return <div className="map-picker"><b>انتخاب موقعیت مشتری</b><small>روی نقشه نقطه دقیق تحویل را انتخاب کنید.</small><div ref={element} className="map-canvas"/>{mapError&&<small className="error">{mapError}</small>}<small>{latitude!==null&&longitude!==null?("مختصات: "+latitude.toFixed(6)+", "+longitude.toFixed(6)):"موقعیت هنوز انتخاب نشده است."}</small></div>;
+  useEffect(()=>{if(map.current&&latitude!==null&&longitude!==null){const L=(window as any).L;if(pin.current)pin.current.setLatLng([latitude,longitude]);else pin.current=L.marker([latitude,longitude]).addTo(map.current);map.current.setView([latitude,longitude],16);}},[latitude,longitude]);
+  async function search(){if(!query.trim())return;setSearching(true);setMapError("");try{const response=await fetch("https://photon.komoot.io/api/?q="+encodeURIComponent(query.trim())+"&limit=7&lat=36.2972&lon=59.6067");if(!response.ok)throw new Error("سرویس جست‌وجوی نشانی پاسخ نداد.");const data=await response.json();const list=(data.features||[]).map((f:any)=>({name:[f.properties?.name,f.properties?.street,f.properties?.district,f.properties?.city,f.properties?.state].filter(Boolean).join("، "),lat:Number(f.geometry.coordinates[1]),lng:Number(f.geometry.coordinates[0])})).filter((x:any)=>Number.isFinite(x.lat)&&Number.isFinite(x.lng));setResults(list);if(!list.length)setMapError("نشانی پیدا نشد؛ نام خیابان یا محله را دقیق‌تر بنویسید.");}catch(e){setMapError(errorMessage(e,"جست‌وجوی نشانی ناموفق بود."));}finally{setSearching(false);}}
+  function choose(x:{name:string;lat:number;lng:number}){const L=(window as any).L;if(map.current&&L){if(pin.current)pin.current.setLatLng([x.lat,x.lng]);else pin.current=L.marker([x.lat,x.lng]).addTo(map.current);map.current.setView([x.lat,x.lng],17);}latest.current.onChange(x.lat,x.lng);setQuery(x.name);setResults([]);}
+  return <div className="map-picker"><b>انتخاب موقعیت مشتری</b><small>نام خیابان، محله یا مکان را جست‌وجو کنید یا روی نقشه نقطه بزنید.</small><div className="map-search"><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="جست‌وجوی نشانی در مشهد…" onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();search();}}}/><button type="button" className="primary-small" disabled={searching||!query.trim()} onClick={search}>{searching?"…":"جست‌وجو"}</button></div>{results.length>0&&<div className="map-results">{results.map((x,i)=><button type="button" key={i} onClick={()=>choose(x)}>{x.name||"موقعیت پیدا شده"}</button>)}</div>}<div ref={element} className="map-canvas"/>{mapError&&<small className="error">{mapError}</small>}<small>{latitude!==null&&longitude!==null?("مختصات: "+latitude.toFixed(6)+", "+longitude.toFixed(6)):"موقعیت هنوز انتخاب نشده است."}</small></div>;
 }
 
 function Field({label,value,set,type="text",required=false}:{label:string;value:string;set:(v:string)=>void;type?:string;required?:boolean}){return <label>{label}<input type={type} min={type==="number"?"0":undefined} value={value} onChange={e=>set(e.target.value)} required={required}/></label>;}
