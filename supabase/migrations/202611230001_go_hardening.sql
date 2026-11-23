@@ -618,3 +618,31 @@ end $$;
 revoke insert, update, delete on public.driver_extra_jobs from authenticated;
 
 grant select on public.profiles to authenticated;
+
+
+-- Permit a driver to acknowledge legacy checks that were already seller-approved,
+-- while still requiring a driver confirmation timestamp before mission completion.
+create or replace function public.driver_confirm_customer_check(p_check_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if not exists (
+    select 1 from public.customer_checks cc
+    join public.missions m on m.order_id = cc.order_id
+    where cc.id = p_check_id and m.driver_id = auth.uid()
+  ) then
+    raise exception 'این چک به مأموریت شما تعلق ندارد.';
+  end if;
+  update public.customer_checks
+  set driver_confirmed_by = auth.uid(),
+      driver_confirmed_at = coalesce(driver_confirmed_at,now()),
+      status = case when status::text = 'approved' then status else 'awaiting_seller' end
+  where id = p_check_id and status::text <> 'rejected';
+  if not found then raise exception 'وضعیت این چک قابل تأیید نیست.'; end if;
+end;
+$$;
+revoke all on function public.driver_confirm_customer_check(uuid) from public;
+grant execute on function public.driver_confirm_customer_check(uuid) to authenticated;
