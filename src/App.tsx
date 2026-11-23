@@ -286,67 +286,58 @@ function OrderList({orders,onAssign,onEdit,onDelete}:{orders:Order[];onAssign:(o
 }
 
 function OrderModal({customers,drivers,onClose,onDone,onError}:{customers:Customer[];drivers:Driver[];onClose:()=>void;onDone:()=>void;onError:(v:string)=>void}) {
-  const [customerId,setCustomerId]=useState(""); const [fullName,setFullName]=useState(""); const [phone,setPhone]=useState("");
-  const [address,setAddress]=useState(""); const [freight,setFreight]=useState("0"); const [cash,setCash]=useState("0");
-  const [checksTotal,setChecksTotal]=useState("0"); const [checksCount,setChecksCount]=useState("0");
-  const [notes,setNotes]=useState(""); const [driverId,setDriverId]=useState("");
-  const [itemName,setItemName]=useState(""); const [brand,setBrand]=useState(""); const [size,setSize]=useState("");
-  const [quantity,setQuantity]=useState("1"); const [weight,setWeight]=useState("medium"); const [itemNotes,setItemNotes]=useState("");
-  const [latitude,setLatitude]=useState<number|null>(null);const [longitude,setLongitude]=useState<number|null>(null);
-  const [busy,setBusy]=useState(false);
-  const chosen=customers.find(c=>c.id===customerId);
-  function chooseCustomer(id:string){setCustomerId(id);const c=customers.find(x=>x.id===id);if(c){setFullName(c.full_name);setPhone(c.phone||"");setAddress(c.address);setLatitude(c.latitude??null);setLongitude(c.longitude??null);}else{setFullName("");setPhone("");setAddress("");setLatitude(null);setLongitude(null);}}
+  const [customerId,setCustomerId]=useState("");const [fullName,setFullName]=useState("");const [phone,setPhone]=useState("");const [phone2,setPhone2]=useState("");
+  const [address,setAddress]=useState("");const [freight,setFreight]=useState("0");const [cash,setCash]=useState("0");
+  const [checksTotal,setChecksTotal]=useState("0");const [checksCount,setChecksCount]=useState("0");const [notes,setNotes]=useState("");const [driverId,setDriverId]=useState("");
+  const [items,setItems]=useState<{name:string;quantity:string}[]>([{name:"",quantity:"1"}]);
+  const [latitude,setLatitude]=useState<number|null>(null);const [longitude,setLongitude]=useState<number|null>(null);const [busy,setBusy]=useState(false);
+  useEffect(()=>{let alive=true;(async()=>{const r=await supabase.from("driver_freight_rates").select("amount_toman").lte("effective_from",new Date().toISOString()).order("effective_from",{ascending:false}).limit(1).maybeSingle();if(alive&&r.data)setFreight(String(r.data.amount_toman));})().catch(()=>{});return()=>{alive=false;};},[]);
+  function chooseCustomer(id:string){setCustomerId(id);const c=customers.find(x=>x.id===id);if(c){setFullName(c.full_name);setPhone(c.phone||"");setPhone2(c.phone2||"");setAddress(c.address);setLatitude(c.latitude??null);setLongitude(c.longitude??null);}else{setFullName("");setPhone("");setPhone2("");setAddress("");setLatitude(null);setLongitude(null);}}
+  function setItem(index:number,key:"name"|"quantity",value:string){setItems(rows=>rows.map((x,i)=>i===index?{...x,[key]:value}:x));}
+  async function savePhones(customer:string){
+    const values=[normalizePhone(phone),normalizePhone(phone2)].filter(Boolean);
+    const existing=await supabase.from("customer_phones").select("id,phone,is_primary").eq("customer_id",customer).order("is_primary",{ascending:false});
+    if(existing.error)throw existing.error;
+    for(let i=0;i<2;i++){const row=existing.data?.[i],value=values[i];if(row&&value){const u=await supabase.from("customer_phones").update({phone:value,is_primary:i===0}).eq("id",row.id);if(u.error)throw u.error;}else if(row&&!value){const d=await supabase.from("customer_phones").delete().eq("id",row.id);if(d.error)throw d.error;}else if(!row&&value){const ins=await supabase.from("customer_phones").insert({customer_id:customer,phone:value,is_primary:i===0});if(ins.error)throw ins.error;}}
+  }
   async function submit(e:FormEvent){
     e.preventDefault();
-    if(!fullName.trim()||!phone.trim()||!address.trim()||!orderItems.length||orderItems.some(x=>!x.name.trim())){
-      onError("برای ثبت سفارش، نام مشتری، شماره تماس، آدرس کامل و نام تشک الزامی است.");return;
-    }
-    if(!/^0?9\d{9}$/.test(phone.replace(/[\s-]/g,""))){
-      onError("شماره تماس معتبر وارد کنید.");return;
-    }
-    if(!Number.isInteger(Number(quantity))||Number(quantity)<1){
-      onError("تعداد کالا باید عدد صحیح و حداقل ۱ باشد.");return;
-    }
-    if([freight,cash,checksTotal,checksCount].some(v=>!Number.isFinite(Number(v))||Number(v)<0)){
-      onError("مبالغ و تعداد چک نمی‌توانند منفی یا نامعتبر باشند.");return;
-    }
-    if((Number(checksTotal)>0)!==(Number(checksCount)>0)){
-      onError("برای چک، هم مبلغ و هم تعداد را وارد کنید.");return;
-    }
+    if(!fullName.trim()||!phone.trim()||!address.trim()||!items.length||items.some(x=>!x.name.trim())){onError("نام مشتری، شماره تماس اول، آدرس و نام کالا الزامی است.");return;}
+    if(!validIranPhone(phone)||(phone2.trim()&&!validIranPhone(phone2))){onError("شماره تماس را با فرمت ۰۹۱۲۳۴۵۶۷۸۹ وارد کنید.");return;}
+    if(items.some(x=>!Number.isInteger(Number(normalizeDigits(x.quantity)))||Number(normalizeDigits(x.quantity))<1)){onError("تعداد هر کالا باید عدد صحیح و حداقل ۱ باشد.");return;}
+    if([freight,cash,checksTotal,checksCount].some(v=>!Number.isFinite(Number(normalizeDigits(v)))||Number(normalizeDigits(v))<0)){onError("مبالغ و تعداد چک نمی‌توانند منفی یا نامعتبر باشند.");return;}
+    if((Number(normalizeDigits(checksTotal))>0)!==(Number(normalizeDigits(checksCount))>0)){onError("برای چک، هم مبلغ و هم تعداد را وارد کنید.");return;}
     setBusy(true);
     try{
-      if(customerId){
-        const customerUpdate=await supabase.from("customers").update({full_name:fullName.trim(),address:address.trim(),latitude,longitude}).eq("id",customerId);
-        if(customerUpdate.error)throw customerUpdate.error;
-        const existingPhone=await supabase.from("customer_phones").select("id").eq("customer_id",customerId).order("is_primary",{ascending:false}).limit(1);
-        if(existingPhone.error)throw existingPhone.error;
-        if(existingPhone.data?.[0]){
-          const phoneUpdate=await supabase.from("customer_phones").update({phone:phone.trim(),is_primary:true}).eq("id",existingPhone.data[0].id);
-          if(phoneUpdate.error)throw phoneUpdate.error;
-        }else{
-          const phoneInsert=await supabase.from("customer_phones").insert({customer_id:customerId,phone:phone.trim(),is_primary:true});
-          if(phoneInsert.error)throw phoneInsert.error;
-        }
-      }
+      if(customerId){const cu=await supabase.from("customers").update({full_name:fullName.trim(),address:address.trim(),latitude,longitude}).eq("id",customerId);if(cu.error)throw cu.error;await savePhones(customerId);}
+      const startedAt=new Date(Date.now()-2000).toISOString();
       const {error}=await supabase.rpc("seller_create_order",{
-        p_customer_id:customerId||null,p_full_name:fullName.trim(),p_address:address.trim(),p_phone:phone.trim(),
-        p_latitude:latitude,p_longitude:longitude,p_freight_toman:Number(freight||0),p_cash_balance_toman:Number(cash||0),
-        p_checks_total_toman:Number(checksTotal||0),p_checks_count:Number(checksCount||0),p_seller_notes:notes.trim()||null,
-        p_items:[{mattress_name:itemName.trim(),brand:brand.trim()||null,size:size.trim()||null,quantity:Number(quantity),weight,notes:itemNotes.trim()||null}],
+        p_customer_id:customerId||null,p_full_name:fullName.trim(),p_address:address.trim(),p_phone:normalizePhone(phone),
+        p_latitude:latitude,p_longitude:longitude,p_freight_toman:Number(normalizeDigits(freight||"0")),p_cash_balance_toman:Number(normalizeDigits(cash||"0")),
+        p_checks_total_toman:Number(normalizeDigits(checksTotal||"0")),p_checks_count:Number(normalizeDigits(checksCount||"0")),p_seller_notes:notes.trim()||null,
+        p_items:items.map(x=>({mattress_name:x.name.trim(),brand:null,size:null,quantity:Number(normalizeDigits(x.quantity)),weight:"medium",notes:null})),
         p_driver_id:driverId||null
       });
-      if(error)throw error;onDone();
-    }catch(e){onError(errorMessage(e,"ثبت سفارش انجام نشد."));}
-    finally{setBusy(false);}
+      if(error)throw error;
+      if(customerId)await savePhones(customerId);
+      else if(phone2.trim()){
+        const {data:userData,error:userError}=await supabase.auth.getUser();if(userError)throw userError;
+        const created=await supabase.from("orders").select("customer_id").eq("created_by",userData.user.id).gte("created_at",startedAt).order("created_at",{ascending:false}).limit(1).maybeSingle();
+        if(created.error)throw created.error;if(!created.data?.customer_id)throw new Error("سفارش ثبت شد اما شماره دوم ذخیره نشد؛ از بخش مشتریان اصلاح کنید.");
+        const ins=await supabase.from("customer_phones").insert({customer_id:created.data.customer_id,phone:normalizePhone(phone2),is_primary:false});if(ins.error)throw ins.error;
+      }
+      if(driverId){const {data:userData}=await supabase.auth.getUser();const created=await supabase.from("orders").select("id").eq("created_by",userData.user?.id||"").gte("created_at",startedAt).order("created_at",{ascending:false}).limit(1).maybeSingle();if(created.data?.id){const rate=await supabase.from("driver_freight_rates").select("amount_toman").lte("effective_from",new Date().toISOString()).order("effective_from",{ascending:false}).limit(1).maybeSingle();if(rate.data){const u=await supabase.from("orders").update({driver_freight_toman:rate.data.amount_toman}).eq("id",created.data.id);if(u.error)throw u.error;}}}
+      onDone();
+    }catch(e){onError(errorMessage(e,"ثبت سفارش انجام نشد."));}finally{setBusy(false);}
   }
   return <Modal title="ثبت سفارش جدید" onClose={onClose}><form className="form-grid" onSubmit={submit}>
     <label className="full">مشتری قبلی (اختیاری)<select value={customerId} onChange={e=>chooseCustomer(e.target.value)}><option value="">ثبت مشتری جدید</option>{customers.map(c=><option key={c.id} value={c.id}>{c.full_name} — {c.address}</option>)}</select></label>
-    <Field label="نام مشتری" value={fullName} set={setFullName} required/><Field label="شماره تماس" value={phone} set={setPhone} required/>
+    <Field label="نام مشتری" value={fullName} set={setFullName} required/><Field label="شماره تماس اول" value={phone} set={setPhone} required/><Field label="شماره تماس دوم (اختیاری)" value={phone2} set={setPhone2}/>
     <label className="full">آدرس تحویل<textarea value={address} onChange={e=>setAddress(e.target.value)} required rows={2}/></label><div className="full"><MapPicker latitude={latitude} longitude={longitude} onChange={(lat,lng)=>{setLatitude(lat);setLongitude(lng);}}/></div>
-    <div className="full divider-label">مشخصات کالا</div><Field label="نام تشک" value={itemName} set={setItemName} required/><Field label="برند" value={brand} set={setBrand}/>
-    <Field label="سایز" value={size} set={setSize}/><Field label="تعداد" value={quantity} set={setQuantity} type="number" required/>
-    <label>وزن کالا<select value={weight} onChange={e=>setWeight(e.target.value)}><option value="light">سبک</option><option value="medium">متوسط</option><option value="heavy">سنگین</option></select></label>
-    <Field label="کرایه (تومان)" value={freight} set={setFreight} type="number"/><Field label="مانده نقدی مشتری (تومان)" value={cash} set={setCash} type="number"/>
+    <div className="full divider-label">کالاهای سفارش</div>
+    {items.map((item,index)=><div className="full item-edit" key={index}><div className="card-top"><b>کالای {index+1}</b>{items.length>1&&<button type="button" className="danger-button" onClick={()=>setItems(rows=>rows.filter((_,i)=>i!==index))}>حذف کالا</button>}</div><div className="inline-fields"><Field label="کالا" value={item.name} set={v=>setItem(index,"name",v)} required/><Field label="تعداد" value={item.quantity} set={v=>setItem(index,"quantity",v)} type="number" required/></div></div>)}
+    <button type="button" className="secondary-button full" onClick={()=>setItems(rows=>[...rows,{name:"",quantity:"1"}])}><Plus size={16}/> افزودن کالا</button>
+    <Field label="کرایه مشتری (تومان)" value={freight} set={setFreight} type="number"/><Field label="مانده نقدی مشتری (تومان)" value={cash} set={setCash} type="number"/>
     <Field label="مبلغ چک‌ها (تومان)" value={checksTotal} set={setChecksTotal} type="number"/><Field label="تعداد چک" value={checksCount} set={setChecksCount} type="number"/>
     <label className="full">ارجاع مستقیم به راننده (اختیاری)<select value={driverId} onChange={e=>setDriverId(e.target.value)}><option value="">فعلاً ارجاع نشود</option>{drivers.map(d=><option key={d.id} value={d.id}>{d.full_name}</option>)}</select></label>
     <label className="full">توضیحات فروشنده<textarea value={notes} onChange={e=>setNotes(e.target.value)} rows={2}/></label>
