@@ -27,9 +27,11 @@ type MissionItem = {
   item?: { mattress_name: string; brand: string | null; size: string | null; weight: string } | null;
 };
 type Check = { id: string; order_id: string; total_amount_toman: number; check_count: number; status: string; seller_review_note: string | null };
-type Ledger = { id: string; driver_id?: string; entry_type: string; amount_toman: number; description: string | null; created_at: string };
+type Ledger = { id: string; driver_id?: string; order_id?: string | null; entry_type: string; amount_toman: number; description: string | null; created_at: string };
+type ExtraJob = {id:string;driver_id:string;job_type:string;title:string;address:string|null;amount_toman:number;notes:string|null;status:string;created_at:string;completed_at:string|null;review_note:string|null};
+type DriverLocation = {driver_id:string;latitude:number;longitude:number;updated_at:string;driver?:{full_name:string;phone:string|null}};
 type CashCollection = { id:string; order_id:string; amount_toman:number; status:string; created_at:string };
-type CustomerCheck = {id:string;order_id:string;total_amount_toman:number;check_count:number;status:string};
+type CustomerCheck = {id:string;order_id:string;total_amount_toman:number;check_count:number;status:string;driver_confirmed_by?:string|null;driver_confirmed_at?:string|null};
 
 function errorMessage(e: unknown, fallback = "عملیات ناموفق بود."): string {
   if (e && typeof e === "object") { const x = e as { message?: unknown; details?: unknown; hint?: unknown }; const parts = [x.message,x.details,x.hint].filter(v => typeof v === "string" && v.trim()) as string[]; if(parts.length)return parts.join(" — "); }
@@ -45,7 +47,11 @@ const money = (v?: number | null) => `${Number(v || 0).toLocaleString("fa-IR")} 
 const normalizeDigits = (value:string) => value.replace(/[۰-۹]/g, d => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d))).replace(/[٠-٩]/g, d => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
 const normalizePhone = (value:string) => normalizeDigits(value).replace(/[\s\-()]/g,"").replace(/^\+98/,"0").replace(/^0098/,"0");
 const validIranPhone = (value:string) => /^09\d{9}$/.test(normalizePhone(value));
-const dateText = (v?: string) => v ? new Date(v).toLocaleString("fa-IR", { dateStyle: "short", timeStyle: "short" }) : "—";
+const dateText = (v?: string) => v ? new Date(v).toLocaleString("fa-IR", { dateStyle: "short", timeStyle: "short", timeZone:"Asia/Tehran", calendar:"persian" }) : "—";
+const tehranDayKey=(v:string|Date)=>{const parts=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date(v));const p=Object.fromEntries(parts.map(x=>[x.type,x.value]));return p.year+"-"+p.month+"-"+p.day;};
+const isTodayTehran=(v?:string)=>!!v&&tehranDayKey(v)===tehranDayKey(new Date());
+const tehranInputValue=()=>{const parts=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(new Date());const p=Object.fromEntries(parts.map(x=>[x.type,x.value]));return p.year+"-"+p.month+"-"+p.day+"T"+p.hour+":"+p.minute;};
+const tehranInputToIso=(v:string)=>new Date(v+":00+03:30").toISOString();
 const statusFa: Record<string, string> = {
   registered: "ثبت‌شده", assigned: "ارجاع‌شده", accepted: "پذیرفته‌شده", loading: "در حال بارگیری",
   on_the_way: "در مسیر", delivered: "تحویل‌شده", partially_delivered: "تحویل ناقص",
@@ -59,7 +65,7 @@ async function fetchAllLedger(driverId?: string): Promise<Ledger[]> {
   const all: Ledger[] = [];
   for (let from = 0; ; from += 1000) {
     const query = supabase.from("driver_ledger")
-      .select("id,driver_id,entry_type,amount_toman,description,created_at")
+      .select("id,driver_id,order_id,entry_type,amount_toman,description,created_at")
       .order("created_at", { ascending: false })
       .order("id", { ascending: true })
       .range(from, from + 999);
@@ -187,6 +193,10 @@ function SellerPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
   const [orders,setOrders] = useState<Order[]>([]);
   const [drivers,setDrivers] = useState<Driver[]>([]);
   const [customers,setCustomers] = useState<Customer[]>([]);
+  const [archivedCustomers,setArchivedCustomers] = useState<Customer[]>([]);
+  const [extraJobs,setExtraJobs] = useState<ExtraJob[]>([]);
+  const [driverLocations,setDriverLocations] = useState<DriverLocation[]>([]);
+  const [showRoundTrip,setShowRoundTrip] = useState(false);
   const [checks,setChecks] = useState<Check[]>([]);
   const [ledger,setLedger] = useState<Ledger[]>([]);
   const [busy,setBusy] = useState(false);
@@ -194,7 +204,7 @@ function SellerPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
   const [assigning,setAssigning] = useState<Order|null>(null);
   const [reviewing,setReviewing] = useState<Check|null>(null);
   const [settling,setSettling] = useState<Driver|null>(null);
-  const [checkPhotos,setCheckPhotos] = useState<Record<string,string[]>>({});
+  
   const [editingOrder,setEditingOrder] = useState<Order|null>(null);
   const [editingCustomer,setEditingCustomer] = useState<Customer|null>(null);
 
@@ -202,26 +212,29 @@ function SellerPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
   const load = useCallback(async()=>{
     setBusy(true); setError("");
     try {
-      const [o,d,c,ch] = await Promise.all([
+      const [o,d,c,ch,extraJobsResult,driverLocationsResult] = await Promise.all([
         supabase.from("orders").select("*").order("created_at",{ascending:false}).limit(100),
         supabase.from("profiles").select("id,full_name,phone").eq("role","driver").eq("is_active",true),
-        supabase.from("customers").select("id,full_name,address,notes,latitude,longitude").eq("is_archived",false).order("full_name"),
-        supabase.from("customer_checks").select("*").order("created_at",{ascending:false}).limit(100)
+        supabase.from("customers").select("id,full_name,address,notes,latitude,longitude,created_at,is_archived").order("full_name"),
+        supabase.from("customer_checks").select("*").order("created_at",{ascending:false}).limit(100),
+        supabase.from("driver_extra_jobs").select("*").order("created_at",{ascending:false}).limit(100),
+        supabase.from("driver_locations").select("driver_id,latitude,longitude,updated_at")
       ]);
-      for (const r of [o,d,c,ch]) if (r.error) throw r.error;
+      for (const r of [o,d,c,ch,extraJobsResult,driverLocationsResult]) if (r.error) throw r.error;
       const allLedger = await fetchAllLedger();
       setOrders((o.data||[]) as Order[]); setDrivers((d.data||[]) as Driver[]);
+      setExtraJobs((extraJobsResult.data||[]) as ExtraJob[]); setDriverLocations((driverLocationsResult.data||[]) as DriverLocation[]);
       const customerRows=(c.data||[]) as Customer[];
       if(customerRows.length){
         const phones=await supabase.from("customer_phones").select("customer_id,phone,is_primary").in("customer_id",customerRows.map(x=>x.id)).order("is_primary",{ascending:false});
         if(phones.error)throw phones.error;
         const phoneMap=new Map<string,string[]>();
         for(const p of phones.data||[]){const list=phoneMap.get(p.customer_id)||[];if(!list.includes(p.phone)&&list.length<2)list.push(p.phone);phoneMap.set(p.customer_id,list);}
-        setCustomers(customerRows.map(x=>({...x,phone:phoneMap.get(x.id)?.[0]||null,phone2:phoneMap.get(x.id)?.[1]||null})));
-      }else setCustomers([]);
+        const enriched=customerRows.map(x=>({...x,phone:phoneMap.get(x.id)?.[0]||null,phone2:phoneMap.get(x.id)?.[1]||null}));
+        setCustomers(enriched.filter(x=>!x.is_archived));
+        setArchivedCustomers(enriched.filter(x=>x.is_archived||!isTodayTehran((x as any).created_at)));
+      }else {setCustomers([]);setArchivedCustomers([]);}
       setChecks((ch.data||[]) as Check[]); setLedger(allLedger);
-      const checkIds=(ch.data||[]).map((x:any)=>x.id);
-      if(checkIds.length){const ph=await supabase.from("check_photos").select("id,check_id,storage_path,expires_at,deleted_at").in("check_id",checkIds).is("deleted_at",null);if(ph.error)throw ph.error;const grouped:Record<string,string[]>={};for(const x of ph.data||[]){if(x.expires_at && new Date(x.expires_at)<new Date())continue;const signed=await supabase.storage.from("mitra-private").createSignedUrl(x.storage_path,1800);if(!signed.error&&signed.data?.signedUrl)(grouped[x.check_id]??=[]).push(signed.data.signedUrl);}setCheckPhotos(grouped);}else setCheckPhotos({});
     } catch(e) { setError(e instanceof Error?e.message:"بارگذاری اطلاعات ناموفق بود."); }
     finally { setBusy(false); }
   },[setError]);
@@ -290,10 +303,10 @@ function SellerPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
 }
 
 function FreightRatePanel({setError,setNotice}:{setError:(v:string)=>void;setNotice:(v:string)=>void}) {
-  const [amount,setAmount]=useState("");const [effective,setEffective]=useState(()=>{const d=new Date(Date.now()-new Date().getTimezoneOffset()*60000);return d.toISOString().slice(0,16);});const [rows,setRows]=useState<{id:string;amount_toman:number;effective_from:string}[]>([]);const [busy,setBusy]=useState(false);
+  const [amount,setAmount]=useState("");const [effective,setEffective]=useState(tehranInputValue);const [rows,setRows]=useState<{id:string;amount_toman:number;effective_from:string}[]>([]);const [busy,setBusy]=useState(false);
   const load=useCallback(async()=>{const r=await supabase.from("driver_freight_rates").select("id,amount_toman,effective_from").order("effective_from",{ascending:false}).limit(50);if(r.error)throw r.error;setRows(r.data||[]);},[]);
   useEffect(()=>{load().catch(e=>setError(errorMessage(e,"دریافت تعرفه‌ها ناموفق بود.")));},[load,setError]);
-  async function submit(e:FormEvent){e.preventDefault();const n=Number(normalizeDigits(amount));if(!Number.isFinite(n)||n<0){setError("مبلغ کرایه معتبر نیست.");return;}setBusy(true);try{const r=await supabase.from("driver_freight_rates").insert({amount_toman:n,effective_from:new Date(effective).toISOString()});if(r.error)throw r.error;setAmount("");setNotice("تعرفه جدید ذخیره شد و از تاریخ تعیین‌شده برای مسیرهای بعدی اعمال می‌شود.");await load();}catch(e){setError(errorMessage(e,"ثبت تعرفه ناموفق بود."));}finally{setBusy(false);}}
+  async function submit(e:FormEvent){e.preventDefault();const n=Number(normalizeDigits(amount));if(!Number.isFinite(n)||n<0){setError("مبلغ کرایه معتبر نیست.");return;}setBusy(true);try{const r=await supabase.from("driver_freight_rates").insert({amount_toman:n,effective_from:tehranInputToIso(effective)});if(r.error)throw r.error;setAmount("");setNotice("تعرفه جدید ذخیره شد و از تاریخ تعیین‌شده برای مسیرهای بعدی اعمال می‌شود.");await load();}catch(e){setError(errorMessage(e,"ثبت تعرفه ناموفق بود."));}finally{setBusy(false);}}
   return <><SectionTitle title="تعرفه کرایه راننده" sub="هر تعرفه از تاریخ و ساعت شروع، روی مأموریت‌هایی که از آن زمان به بعد ارجاع می‌شوند اعمال می‌شود."/><form className="data-card form-stack" onSubmit={submit}><Field label="مبلغ کرایه هر مسیر (تومان)" value={amount} set={setAmount} type="number" required/><label>تاریخ و ساعت شروع اعمال<input type="datetime-local" value={effective} onChange={e=>setEffective(e.target.value)} required/></label><button className="primary-button" disabled={busy}>{busy?"در حال ذخیره…":"ثبت تعرفه جدید"}</button></form><SectionTitle title="سوابق تعرفه‌ها"/><div className="stack">{rows.map(r=><div className="data-card compact" key={r.id}><div className="card-top"><b>{money(r.amount_toman)}</b><small>{dateText(r.effective_from)}</small></div></div>)}{!rows.length&&<Empty text="هنوز تعرفه‌ای ثبت نشده است."/>}</div></>;
 }
 
