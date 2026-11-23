@@ -1,2 +1,7 @@
-# mitra-run
-Mitra Run - Mattress Delivery Management PWA
+# GO
+
+سامانه هوشمند مدیریت سفارش‌ها، رانندگان، تسویه‌ها و مسیرهای ارسال.
+
+شعار: «هر مسیر، یک قدم به مقصد.»
+
+Every route brings us closer.
