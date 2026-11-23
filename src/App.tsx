@@ -187,7 +187,7 @@ function SellerPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
   const [settling,setSettling] = useState<Driver|null>(null);
   const [checkPhotos,setCheckPhotos] = useState<Record<string,string[]>>({});
   const [editingOrder,setEditingOrder] = useState<Order|null>(null);
-  const [editingOrder,setEditingOrder] = useState<Order|null>(null);
+
 
   const load = useCallback(async()=>{
     setBusy(true); setError("");
