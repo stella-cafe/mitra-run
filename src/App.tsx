@@ -559,7 +559,7 @@ function DriverPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
       if(error)throw error;setNotice(stage==="loaded"?"بارگیری کالا ثبت شد.":"خدا قوت ای مرد ❤️");await load();
     }catch(e){setError(errorMessage(e,"ثبت عملیات کالا ناموفق بود."));}
   }
-  async async function confirmCheck(c:CustomerCheck){try{const {error}=await supabase.rpc("driver_confirm_customer_check",{p_check_id:c.id});if(error)throw error;setNotice("تأیید چک برای بررسی فروشنده ارسال شد.");await load();}catch(e){setError(errorMessage(e,"تأیید چک ناموفق بود."));}}
+  async function confirmCheck(c:CustomerCheck){try{const {error}=await supabase.rpc("driver_confirm_customer_check",{p_check_id:c.id});if(error)throw error;setNotice("تأیید چک برای بررسی فروشنده ارسال شد.");await load();}catch(e){setError(errorMessage(e,"تأیید چک ناموفق بود."));}}
   async function complete(m:Mission,freightCollected:boolean){
     try{const {error}=await supabase.rpc("driver_complete_mission",{p_mission_id:m.id,p_freight_collected:freightCollected});if(error)throw error;setNotice("اتمام مأموریت ثبت شد.");await load();}
     catch(e){setError(errorMessage(e,"اتمام مأموریت ناموفق بود."));}
