@@ -18,7 +18,7 @@ type Order = {
   checks_count: number; seller_notes: string | null; created_at: string;
 };
 type Mission = {
-  id: string; order_id: string; driver_id: string; status: string; failure_reason?: string | null;
+  id: string; order_id: string; driver_id: string; status: string; created_at:string; failure_reason?: string | null;
   order?: Order | null; customer?: Customer | null;
 };
 type MissionItem = {
