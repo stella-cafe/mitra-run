@@ -10,11 +10,11 @@ import {
 
 type Role = "seller" | "driver";
 type Profile = { id: string; full_name: string; phone: string | null; role: Role; is_active: boolean };
-type Customer = { id: string; full_name: string; address: string; notes?: string | null; latitude?: number | null; longitude?: number | null; phone?: string | null };
+type Customer = { id: string; full_name: string; address: string; notes?: string | null; latitude?: number | null; longitude?: number | null; phone?: string | null; phone2?: string | null };
 type Driver = { id: string; full_name: string; phone: string | null };
 type Order = {
   id: string; order_number: number; customer_id: string; status: string;
-  freight_toman: number; customer_cash_balance_toman: number; checks_total_toman: number;
+  freight_toman: number; driver_freight_toman?: number | null; customer_cash_balance_toman: number; checks_total_toman: number;
   checks_count: number; seller_notes: string | null; created_at: string;
 };
 type Mission = {
@@ -42,6 +42,9 @@ const distanceKm = (a:{latitude:number;longitude:number},b:{latitude:number;long
   return 6371*2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h));
 };
 const money = (v?: number | null) => `${Number(v || 0).toLocaleString("fa-IR")} تومان`;
+const normalizeDigits = (value:string) => value.replace(/[۰-۹]/g, d => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d))).replace(/[٠-٩]/g, d => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
+const normalizePhone = (value:string) => normalizeDigits(value).replace(/[\s\-()]/g,"").replace(/^\+98/,"0").replace(/^0098/,"0");
+const validIranPhone = (value:string) => /^09\d{9}$/.test(normalizePhone(value));
 const dateText = (v?: string) => v ? new Date(v).toLocaleString("fa-IR", { dateStyle: "short", timeStyle: "short" }) : "—";
 const statusFa: Record<string, string> = {
   registered: "ثبت‌شده", assigned: "ارجاع‌شده", accepted: "پذیرفته‌شده", loading: "در حال بارگیری",
@@ -147,19 +150,19 @@ export default function App() {
     setSession(null); setProfile(null); setTab("home"); setBusy(false);
   }
 
-  if (loading) return <div className="loading-screen"><Loader2 className="spin" size={36}/><p>در حال بارگذاری MITRA RUN...</p></div>;
+  if (loading) return <div className="loading-screen"><Loader2 className="spin" size={36}/><p>در حال آماده‌سازی مسیرها…</p><strong>هر مسیر، یک قدم به مقصد</strong><small>Every route brings us closer.</small></div>;
   if (!session || !profile) return <main className="login-page"><form className="login-card" onSubmit={login}>
-    <div className="brand-icon"><Truck size={34}/></div><h1>MITRA RUN</h1>
-    <p className="subtitle">سامانه مدیریت ارسال تشک میترا</p>
+    <div className="brand-icon"><Truck size={34}/></div><h1>GO</h1>
+    <p className="subtitle">سامانه هوشمند مدیریت مسیرها و ارسال</p>
     <label>ایمیل</label><input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="ایمیل حساب کاربری" autoComplete="username" required/>
     <label>رمز عبور</label><div style={{display:"flex",gap:8,alignItems:"center"}}><input style={{flex:1}} type={showPassword?"text":"password"} value={password} onChange={e=>setPassword(e.target.value)} placeholder="رمز عبور" autoComplete="current-password" required/><button type="button" className="icon-button" aria-label={showPassword?"پنهان کردن رمز عبور":"نمایش رمز عبور"} onClick={()=>setShowPassword(v=>!v)}>{showPassword?<EyeOff size={18}/>:<Eye size={18}/>}</button></div>
     {error && <div className="error">{error}</div>}
     <button className="primary-button" disabled={busy}>{busy ? "در حال ورود..." : "ورود به سامانه"}</button>
-    <span className="version">MITRA RUN • VERSION 1.1</span>
+    <span className="version">GO • VERSION 1.1</span>
   </form></main>;
 
   return <main className="app-shell">
-    <header className="topbar"><div className="brand"><span className="brand-mark"><Truck size={23}/></span><div><strong>MITRA RUN</strong><small>مدیریت ارسال میترا</small></div></div>
+    <header className="topbar"><div className="brand"><span className="brand-mark"><Truck size={23}/></span><div><strong>GO</strong><small>مدیریت هوشمند مسیرها</small></div></div>
       <div className="user-actions"><span className="user-name">{profile.full_name || session.user.email}</span><button className="icon-button" onClick={logout} title="خروج"><LogOut size={18}/></button></div>
     </header>
     <div className="page-heading"><div><span className="eyebrow">خوش آمدید</span><h1>{profile.role === "seller" ? "پنل فروشنده" : "پنل راننده"}</h1><p>{profile.role === "seller" ? "مدیریت سفارش‌ها، رانندگان و امور مالی" : "مأموریت‌ها و عملیات روزانه شما"}</p></div>
@@ -168,7 +171,7 @@ export default function App() {
     {notice && <div className="alert success-alert"><CheckCircle2 size={17}/>{notice}<button onClick={()=>setNotice("")}><X size={15}/></button></div>}
     {profile.role === "seller" ? <SellerPanel profile={profile} tab={tab} setTab={setTab} setError={setError} setNotice={setNotice}/> :
       <DriverPanel profile={profile} tab={tab} setTab={setTab} setError={setError} setNotice={setNotice}/>}
-    <footer>MITRA RUN © 2026</footer>
+    <footer>GO © 2026</footer>
   </main>;
 }
 
@@ -178,7 +181,7 @@ function Nav({tab,setTab,items}:{tab:string;setTab:(v:string)=>void;items:{id:st
 function SectionTitle({title,sub,action}:{title:string;sub?:string;action?:ReactNode}) {
   return <div className="section-title"><div><h2>{title}</h2>{sub&&<p>{sub}</p>}</div>{action}</div>;
 }
-function Empty({text}:{text:string}) { return <div className="empty-state"><Package size={30}/><p>{text}</p></div>; }
+function Empty({text}:{text:string}) { return <div className="empty-state"><Package size={30}/><p>{text}</p><small>هر مسیر، یک قدم به مقصد · Every route brings us closer.</small></div>; }
 
 function SellerPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;tab:string;setTab:(v:string)=>void;setError:(v:string)=>void;setNotice:(v:string)=>void}) {
   const [orders,setOrders] = useState<Order[]>([]);
