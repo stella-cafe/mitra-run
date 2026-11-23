@@ -5,7 +5,7 @@ import type { Session } from "@supabase/supabase-js";
 import {
   Truck, LogOut, Package, Users, ClipboardList, Loader2, Plus,
   RefreshCw, CheckCircle2, Clock3, MapPin, Wallet, FileCheck,
-  ChevronLeft, X, Warehouse, AlertCircle, Eye, EyeOff
+  ChevronLeft, X, Warehouse, AlertCircle, Eye, EyeOff, Phone
 } from "lucide-react";
 
 type Role = "seller" | "driver";
@@ -302,6 +302,7 @@ function DriverPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
   const [missions,setMissions]=useState<Mission[]>([]); const [items,setItems]=useState<Record<string,MissionItem[]>>({});
   const [ledger,setLedger]=useState<Ledger[]>([]); const [cashCollections,setCashCollections]=useState<CashCollection[]>([]); const [checksByOrder,setChecksByOrder]=useState<Record<string,CustomerCheck[]>>({}); const [busy,setBusy]=useState(false);
   const [visitOpen,setVisitOpen]=useState(false); const [activeMission,setActiveMission]=useState<string|null>(null);
+  const [contactsOpen,setContactsOpen]=useState(false);
   const load=useCallback(async()=>{
     setBusy(true);setError("");
     try{
@@ -367,6 +368,13 @@ function DriverPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
     </>}
     {tab==="finance"&&<><SectionTitle title="حساب راننده" sub="گردش حساب و کرایه‌های ثبت‌شده"/><div className="balance-card"><span>مانده حساب</span><strong>{money(ledger.reduce((s,x)=>s+x.amount_toman,0))}</strong></div><div className="stack">{ledger.map(x=><div className="data-card compact" key={x.id}><div className="card-top"><strong>{ledgerLabel(x.entry_type)}</strong><b className={x.amount_toman<0?"negative":"positive"}>{money(x.amount_toman)}</b></div><p>{x.description||"—"}</p><small>{dateText(x.created_at)}</small></div>)}{!ledger.length&&<Empty text="تراکنشی ثبت نشده است."/>}</div></>}
     {busy&&<div className="inline-loading"><Loader2 className="spin" size={16}/> در حال بروزرسانی…</div>}
+    <div style={{position:"fixed",left:18,bottom:18,zIndex:8}}>
+      {contactsOpen&&<div className="data-card" style={{width:245,marginBottom:10,boxShadow:"0 8px 30px #0008"}}>
+        <div className="card-top"><strong>تماس‌های ضروری</strong><button className="icon-button" onClick={()=>setContactsOpen(false)} aria-label="بستن"><X size={15}/></button></div>
+        {[["حسین نجفی","09045455385"],["آقایی","09155225532"],["امیررضا رحمانی","09059586495"]].map(([name,phone])=><a key={phone} href={`tel:${phone}`} style={{display:"flex",justifyContent:"space-between",padding:"11px 2px",borderBottom:"1px solid #302a39",color:"#e7d9f5",textDecoration:"none",fontSize:12}}><span>{name}</span><span dir="ltr">{phone}</span></a>)}
+      </div>}
+      <button className="primary-small" onClick={()=>setContactsOpen(v=>!v)} aria-label="تماس‌های ضروری" style={{width:52,height:52,borderRadius:"50%",boxShadow:"0 5px 20px #0008"}}><Phone size={21}/></button>
+    </div>
   </>;
 }
 function MissionCard({mission,items,onOpen}:{mission:Mission;items:MissionItem[];onOpen:()=>void}) {
