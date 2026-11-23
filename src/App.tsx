@@ -10,7 +10,7 @@ import {
 
 type Role = "seller" | "driver";
 type Profile = { id: string; full_name: string; phone: string | null; role: Role; is_active: boolean };
-type Customer = { id: string; full_name: string; address: string; notes?: string | null };
+type Customer = { id: string; full_name: string; address: string; notes?: string | null; latitude?: number | null; longitude?: number | null; phone?: string | null };
 type Driver = { id: string; full_name: string; phone: string | null };
 type Order = {
   id: string; order_number: number; customer_id: string; status: string;
@@ -319,9 +319,17 @@ function DriverPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
         if(os.error)throw os.error;if(mi.error)throw mi.error;
         const orderMap=new Map((os.data||[]).map((x:any)=>[x.id,x]));
         const customerIds=[...new Set((os.data||[]).map((x:any)=>x.customer_id))];
-        const customerResult=customerIds.length ? await supabase.from("customers").select("id,full_name,address,notes").in("id",customerIds) : {data:[],error:null};
+        const [customerResult, phoneResult] = customerIds.length ? await Promise.all([
+          supabase.from("customers").select("id,full_name,address,notes,latitude,longitude").in("id",customerIds),
+          supabase.from("customer_phones").select("customer_id,phone,is_primary").in("customer_id",customerIds).order("is_primary",{ascending:false})
+        ]) : [{data:[],error:null},{data:[],error:null}];
         if(customerResult.error)throw customerResult.error;
-        const customerMap=new Map((customerResult.data||[]).map((x:any)=>[x.id,x]));
+        if(phoneResult.error)throw phoneResult.error;
+        const primaryPhones = new Map<string,string>();
+        for (const p of phoneResult.data || []) {
+          if (!primaryPhones.has(p.customer_id)) primaryPhones.set(p.customer_id,p.phone);
+        }
+        const customerMap=new Map((customerResult.data||[]).map((x:any)=>[x.id,{...x,phone:primaryPhones.get(x.id)||null}]));
         const itemsRaw=(mi.data||[]) as MissionItem[];
         const itemIds=[...new Set(itemsRaw.map(x=>x.order_item_id))];
         let itemMap=new Map<string,any>();
@@ -378,7 +386,9 @@ function MissionModal({mission,items,checks,userId,onClose,onStatus,onUpdateItem
   };
   return <Modal title="جزئیات مأموریت" onClose={onClose}><div className="form-stack">
     <div className="card-top"><strong>سفارش #{mission.order?.order_number?.toLocaleString("fa-IR")||"—"}</strong><Status value={mission.status}/></div>
-    <div className="detail-box"><b>{mission.customer?.full_name||"اطلاعات مشتری"}</b><p>{mission.customer?.address||"آدرس ثبت نشده است."}</p><p>کرایه: {money(mission.order?.freight_toman)}</p><p>مانده نقدی: {money(mission.order?.customer_cash_balance_toman)}</p></div>
+    <div className="detail-box"><b>{mission.customer?.full_name||"اطلاعات مشتری"}</b><p>{mission.customer?.phone ? <>شماره تماس: <a href={`tel:${mission.customer.phone}`}>{mission.customer.phone}</a></> : "شماره تماس ثبت نشده است."}</p><p>{mission.customer?.address||"آدرس ثبت نشده است."}</p>
+      {mission.customer?.latitude!=null&&mission.customer?.longitude!=null&&<p><a href={`https://nshn.ir/?lat=${mission.customer.latitude}&lng=${mission.customer.longitude}`} target="_blank" rel="noreferrer">مسیریابی در نشان</a></p>}
+      <p>کرایه: {money(mission.order?.freight_toman)}</p><p>مانده نقدی: {money(mission.order?.customer_cash_balance_toman)}</p></div>
     <SectionTitle title="اقلام سفارش"/>
     {items.map(it=>{const v=draft[it.id]||{loaded:String(it.loaded_quantity??0),delivered:String(it.delivered_quantity??0),note:it.discrepancy_note||""};return <div className="item-edit" key={it.id}><b>{it.item?.mattress_name||"کالای سفارش"}</b><small>{[it.item?.brand,it.item?.size,weightFa[it.item?.weight||""]].filter(Boolean).join(" · ")}</small><span>تعداد سفارش: {it.ordered_quantity.toLocaleString("fa-IR")}</span><div className="inline-fields"><label>بارگیری<input type="number" min="0" max={it.ordered_quantity} value={v.loaded} onChange={e=>setDraft(d=>({...d,[it.id]:{...v,loaded:e.target.value}}))}/></label><label>تحویل<input type="number" min="0" max={it.ordered_quantity} value={v.delivered} onChange={e=>setDraft(d=>({...d,[it.id]:{...v,delivered:e.target.value}}))}/></label></div><label>توضیح مغایرت<input value={v.note} onChange={e=>setDraft(d=>({...d,[it.id]:{...v,note:e.target.value}}))}/></label><button className="small-button" onClick={()=>onUpdateItem(it,Number(v.loaded),Number(v.delivered),v.note)}>ثبت تعداد</button></div>;})}
     {checks.length>0&&<div className="detail-box"><b>تصاویر چک مشتری</b>{checks.map(c=><div key={c.id} className="item-edit"><span>{c.check_count.toLocaleString("fa-IR")} فقره · {money(c.total_amount_toman)} · {statusFa[c.status]||c.status}</span>{c.status==="awaiting_driver"&&<label>بارگذاری تصویر چک<input type="file" accept="image/*,.pdf" disabled={uploading} onChange={e=>{const f=e.target.files?.[0];if(f)uploadCheck(c.id,f);e.currentTarget.value="";}}/></label>}</div>)}</div>}
