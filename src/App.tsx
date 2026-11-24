@@ -481,7 +481,7 @@ function DriverLocationsMap({locations,drivers}:{locations:DriverLocation[];driv
       if(map.current)map.current.remove();
       const points=latest.current.locations;const center:[number,number]=points.length?[points[0].latitude,points[0].longitude]:[36.2972,59.6067];
       map.current=L.map(element.current,{scrollWheelZoom:true,zoomControl:true}).setView(center,points.length?15:14);
-      const base=maplibreGL({style:"https://tiles.openfreemap.org/styles/liberty"}).addTo(map.current);let fallbackAdded=false;const fallback=()=>{if(fallbackAdded||!map.current)return;fallbackAdded=true;L.tileLayer("https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png",{subdomains:["a","b","c"],maxZoom:19,attribution:"© OpenStreetMap contributors, HOT"}).addTo(map.current);};try{base.getMaplibreMap().on("error",fallback);}catch{}
+      const hot=L.tileLayer("https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png",{subdomains:["a","b","c"],maxZoom:19,attribution:"© OpenStreetMap contributors, HOT",crossOrigin:true}).addTo(map.current);let fallbackAdded=false;hot.on("tileerror",()=>{if(fallbackAdded||!map.current)return;fallbackAdded=true;L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{subdomains:["a","b","c"],maxZoom:19,attribution:"© OpenStreetMap contributors"}).addTo(map.current);});
       layer.current=L.layerGroup().addTo(map.current);
       renderMarkers();
       setTimeout(()=>map.current&&map.current.invalidateSize(),150);
