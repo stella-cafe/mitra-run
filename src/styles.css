@@ -45,3 +45,21 @@ footer{text-align:center;color:#655d6e;font-size:10px;margin-top:45px}
 .status-delivered,.status-approved{background:#1d4436;color:#9be4b8}
 .status-pending_approval{background:#4b2630;color:#ffb2bc}
 @media(max-width:480px){.map-search{flex-direction:column;align-items:stretch}.map-search button{width:100%}.live-driver-map{height:280px}}
+
+
+/* Operational UI refresh: clearer hierarchy, touch targets and map affordances */
+:root{color-scheme:dark}
+button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid #c49aef;outline-offset:2px}
+.primary-button,.primary-small{box-shadow:0 5px 16px #9b70c322;transition:transform .15s ease,filter .15s ease}
+.primary-button:hover:not(:disabled),.primary-small:hover:not(:disabled){filter:brightness(1.08);transform:translateY(-1px)}
+.data-card,.mission-card,.stat-card{box-shadow:0 8px 24px #0002;transition:border-color .15s ease,transform .15s ease}
+.mission-card{text-align:right}
+.mission-card:focus-visible{outline:2px solid #c49aef;outline-offset:2px}
+.nav-tabs{scrollbar-width:thin;scrollbar-color:#5b456c transparent}
+.nav-tabs button{min-height:42px}
+.map-canvas{min-height:250px;border:1px solid #40364c}
+.live-driver-map{min-height:320px}
+.neshan-link{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:8px 13px;border-radius:10px;background:#c49aef;color:#21162b;text-decoration:none;font-size:12px;font-weight:800}
+.map-picker .leaflet-marker-icon{cursor:grab}
+.map-picker .leaflet-marker-icon:active{cursor:grabbing}
+@media(max-width:680px){.nav-tabs{position:sticky;top:0;z-index:5;box-shadow:0 8px 20px #0005}.section-title h2{font-size:16px}.small-button,.primary-small,.secondary-button,.danger-button{min-height:40px}.map-canvas{height:290px}.live-driver-map{height:320px}}
