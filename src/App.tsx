@@ -486,7 +486,7 @@ function MapPicker({latitude,longitude,onChange}:{latitude:number|null;longitude
         if(photon.ok){const data=await photon.json();list=normalize(data.features||[],"photon");}
       }catch{}
       if(!list.length){
-        const nominatimParams=new URLSearchParams({q:term,format:"jsonv2",addressdetails:"1",limit:"8","accept-language":"fa",countrycodes:"ir",viewbox:"60.2,36.6,59.0,35.7"});
+        const nominatimParams=new URLSearchParams({q:term,format:"jsonv2",addressdetails:"1",limit:"8","accept-language":"fa",countrycodes:"ir",viewbox:"59.0,36.6,60.2,35.7"});
         const nominatim=await fetch("https://nominatim.openstreetmap.org/search?"+nominatimParams.toString(),{headers:{Accept:"application/json"}});
         if(!nominatim.ok)throw new Error("سرویس‌های جست‌وجوی نشانی پاسخ ندادند. چند لحظه بعد دوباره امتحان کنید.");
         list=normalize(await nominatim.json(),"nominatim");
