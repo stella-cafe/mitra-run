@@ -12,8 +12,8 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker
-      .register(`${import.meta.env.BASE_URL}sw.js`, {
-        scope: import.meta.env.BASE_URL,
+      .register("/mitra-run/sw.js", {
+        scope: "/mitra-run/",
       })
       .catch((error) => {
         console.error("MITRA RUN service worker registration failed:", error);
