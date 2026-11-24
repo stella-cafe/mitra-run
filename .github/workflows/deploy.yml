@@ -38,6 +38,14 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
+      - name: Generate Android install icons
+        run: |
+          mkdir -p dist
+          convert public/mitra-run-icon.svg -background none -resize 192x192 dist/mitra-run-icon-192.png
+          convert public/mitra-run-icon.svg -background none -resize 512x512 dist/mitra-run-icon-512.png
+          test -s dist/mitra-run-icon-192.png
+          test -s dist/mitra-run-icon-512.png
+
       - name: Upload website
         uses: actions/upload-pages-artifact@v3
         with:
