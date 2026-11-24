@@ -13,16 +13,16 @@
   "theme_color": "#111018",
   "icons": [
     {
-      "src": "/mitra-run/mitra-run-icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/mitra-run/mitra-run-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/mitra-run/mitra-run-icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "maskable"
+      "src": "/mitra-run/mitra-run-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }
