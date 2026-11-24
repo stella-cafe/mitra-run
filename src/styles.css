@@ -63,3 +63,16 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 .map-picker .leaflet-marker-icon{cursor:grab}
 .map-picker .leaflet-marker-icon:active{cursor:grabbing}
 @media(max-width:680px){.nav-tabs{position:sticky;top:0;z-index:5;box-shadow:0 8px 20px #0005}.section-title h2{font-size:16px}.small-button,.primary-small,.secondary-button,.danger-button{min-height:40px}.map-canvas{height:290px}.live-driver-map{height:320px}}
+
+
+.jalali-field{display:flex;flex-direction:column;gap:8px}
+.jalali-input-row{display:grid;grid-template-columns:1fr 120px;gap:8px}
+.jalali-input-row input[readonly]{cursor:pointer}
+.jalali-toggle{align-self:flex-start}
+.jalali-calendar{padding:12px;border:1px solid #59466b;border-radius:13px;background:#211b2a;box-shadow:0 12px 28px #0005}
+.jalali-calendar-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.jalali-calendar-head button{width:34px;height:34px;border:1px solid #4a3b58;border-radius:9px;background:#30213f;color:#f0ddff;font-size:20px}
+.jalali-week,.jalali-days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px;text-align:center}
+.jalali-week span{padding:7px 0;color:#bba9ca;font-size:11px}
+.jalali-days button{min-height:38px;border:1px solid transparent;border-radius:9px;background:#17131e;color:#eee3f6}
+.jalali-days button:hover,.jalali-days button.selected{background:#c49aef;color:#21162b;font-weight:800}
