@@ -449,8 +449,8 @@ function MapPicker({latitude,longitude,onChange}:{latitude:number|null;longitude
     const init=()=>{const L=(window as any).L;if(cancelled||!L||!element.current)return;
       if(L.Icon?.Default){delete L.Icon.Default.prototype._getIconUrl;L.Icon.Default.mergeOptions({iconRetinaUrl:"https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",iconUrl:"https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",shadowUrl:"https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png"});}
       if(map.current)map.current.remove();const cur=latest.current;const start:[number,number]=cur.latitude!==null&&cur.longitude!==null?[cur.latitude,cur.longitude]:[36.2972,59.6067];
-      map.current=L.map(element.current).setView(start,cur.latitude!==null&&cur.longitude!==null?16:12);
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",{subdomains:"abcd",maxZoom:20,attribution:"© OpenStreetMap © CARTO"}).addTo(map.current);
+      map.current=L.map(element.current,{scrollWheelZoom:true,zoomControl:true}).setView(start,cur.latitude!==null&&cur.longitude!==null?17:14);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{subdomains:["a","b","c"],maxZoom:19,attribution:"© OpenStreetMap contributors"}).addTo(map.current);
       if(cur.latitude!==null&&cur.longitude!==null){pin.current=L.marker(start,{draggable:true}).addTo(map.current);pin.current.on("dragend",(ev:any)=>{const p=ev.target.getLatLng();latest.current.onChange(Number(p.lat.toFixed(7)),Number(p.lng.toFixed(7)));});}
       map.current.on("click",(ev:any)=>{const lat=Number(ev.latlng.lat.toFixed(7)),lng=Number(ev.latlng.lng.toFixed(7));if(pin.current)pin.current.setLatLng([lat,lng]);else{pin.current=L.marker([lat,lng],{draggable:true}).addTo(map.current);pin.current.on("dragend",(ev:any)=>{const p=ev.target.getLatLng();latest.current.onChange(Number(p.lat.toFixed(7)),Number(p.lng.toFixed(7)));});}latest.current.onChange(lat,lng);});
       setTimeout(()=>map.current&&map.current.invalidateSize(),120);
@@ -477,8 +477,8 @@ function DriverLocationsMap({locations,drivers}:{locations:DriverLocation[];driv
     const init=()=>{const L=(window as any).L;if(cancelled||!L||!element.current)return;
       if(map.current)map.current.remove();
       const points=latest.current.locations;const center:[number,number]=points.length?[points[0].latitude,points[0].longitude]:[36.2972,59.6067];
-      map.current=L.map(element.current).setView(center,points.length?14:12);
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",{subdomains:"abcd",maxZoom:20,attribution:"© OpenStreetMap © CARTO"}).addTo(map.current);
+      map.current=L.map(element.current,{scrollWheelZoom:true,zoomControl:true}).setView(center,points.length?15:14);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{subdomains:["a","b","c"],maxZoom:19,attribution:"© OpenStreetMap contributors"}).addTo(map.current);
       layer.current=L.layerGroup().addTo(map.current);
       renderMarkers();
       setTimeout(()=>map.current&&map.current.invalidateSize(),150);
@@ -653,7 +653,7 @@ function MissionModal({mission,driverPosition,items,checks,pendingCash,cashBusy,
   return <Modal title="جزئیات مأموریت" onClose={onClose}><div className="form-stack">
     <div className="card-top"><strong>سفارش #{mission.order?.order_number?.toLocaleString("fa-IR")||"—"}</strong><Status value={mission.status}/></div>
     <div className="detail-box"><b>{mission.customer?.full_name||"اطلاعات مشتری"}</b><p>{mission.customer?.phone ? <>تلفن اول: <a href={"tel:"+mission.customer.phone}>{mission.customer.phone}</a></> : "شماره تماس ثبت نشده است."}{mission.customer?.phone2&&<> · تلفن دوم: <a href={"tel:"+mission.customer.phone2}>{mission.customer.phone2}</a></>}</p><p>{mission.customer?.address||"آدرس ثبت نشده است."}</p>
-      {mission.customer?.latitude!=null&&mission.customer?.longitude!=null&&<p><a href={driverPosition?"https://nshn.ir/?origin="+driverPosition.latitude+","+driverPosition.longitude+"&destination="+mission.customer.latitude+","+mission.customer.longitude+"&vehicle=d":"https://nshn.ir/?lat="+mission.customer.latitude+"&lng="+mission.customer.longitude} target="_blank" rel="noreferrer">{driverPosition?"شروع مسیریابی با نشان":"نمایش مقصد در نشان"}</a></p>}
+      {mission.customer?.latitude!=null&&mission.customer?.longitude!=null&&<p><a href={driverPosition?"https://nshn.ir/maps?origin="+encodeURIComponent(driverPosition.latitude+","+driverPosition.longitude)+"&destination="+encodeURIComponent(mission.customer.latitude+","+mission.customer.longitude)+"&type=drive":"https://nshn.ir/?lat="+mission.customer.latitude+"&lng="+mission.customer.longitude} target="_blank" rel="noreferrer">{driverPosition?"شروع مسیریابی با نشان":"نمایش مقصد در نشان"}</a></p>}
       <p>کرایه مشتری: {money(mission.order?.freight_toman)}</p><p>کرایه راننده: {money(mission.order?.driver_freight_toman)}</p><p>مانده نقدی: {money(mission.order?.customer_cash_balance_toman)}</p></div>
     <SectionTitle title="اقلام سفارش"/>
     {items.map(it=><div className="item-edit" key={it.id}><b>{it.item?.mattress_name||"کالای سفارش"}</b><span>تعداد سفارش: {it.ordered_quantity.toLocaleString("fa-IR")}</span>
