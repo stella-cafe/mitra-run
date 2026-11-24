@@ -707,6 +707,26 @@ function DriverPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
 function MissionCard({mission,items,onOpen}:{mission:Mission;items:MissionItem[];onOpen:()=>void}) {
   return <button className="mission-card" onClick={onOpen}><div className="card-top"><strong>{mission.customer?.full_name||"مشتری"} · مأموریت #{mission.id.slice(0,8)}</strong><Status value={mission.status}/></div><p>{mission.customer?.address||"آدرس ثبت نشده"}</p><p>سفارش #{mission.order?.order_number?.toLocaleString("fa-IR")||"—"} · کرایه راننده: {money(mission.order?.driver_freight_toman)}</p><div className="card-bottom"><small>{items.length.toLocaleString("fa-IR")} قلم کالا · {dateText(mission.created_at)}</small><ChevronLeft size={18}/></div></button>;
 }
+function openNeshanRoute(destLat:number,destLng:number,origin:{latitude:number;longitude:number}|null){
+  if(!Number.isFinite(destLat)||!Number.isFinite(destLng)||destLat===0||destLng===0){alert("مختصات مقصد سفارش معتبر نیست.");return;}
+  const validOrigin=!!origin&&Number.isFinite(origin.latitude)&&Number.isFinite(origin.longitude)&&origin.latitude!==0&&origin.longitude!==0;
+  const originPart=validOrigin?"&origin="+encodeURIComponent(origin!.latitude+","+origin!.longitude):"";
+  const destination=encodeURIComponent(destLat+","+destLng);
+  const webUrl="https://nshn.ir/?destination="+destination+originPart+"&vehicle=d";
+  const ua=navigator.userAgent||"";
+  const isIOS=/iPhone|iPad|iPod/i.test(ua);
+  if(isIOS){
+    const appUrl="neshan://?destination="+destination+originPart+"&vehicle=d";
+    let switched=false;
+    const markSwitched=()=>{if(document.hidden)switched=true;};
+    document.addEventListener("visibilitychange",markSwitched,{once:true});
+    window.location.href=appUrl;
+    window.setTimeout(()=>{document.removeEventListener("visibilitychange",markSwitched);if(!switched&&!document.hidden)window.location.href=webUrl;},1200);
+    return;
+  }
+  // Android Neshan intent endpoint and desktop/web fallback share the documented HTTPS route format.
+  window.location.href=webUrl;
+}
 function MissionModal({mission,driverPosition,items,checks,pendingCash,cashBusy,onClose,onStatus,onUpdateItem,onComplete,onConfirmCheck,onMarkCash}:{mission:Mission;driverPosition:{latitude:number;longitude:number}|null;items:MissionItem[];checks:CustomerCheck[];pendingCash:CashCollection[];cashBusy:string|null;onClose:()=>void;onStatus:(m:Mission,s:string,r?:string)=>Promise<void>;onUpdateItem:(i:MissionItem,stage:"loaded"|"delivered")=>Promise<void>;onComplete:(m:Mission,freightCollected:boolean)=>Promise<void>;onConfirmCheck:(c:CustomerCheck)=>Promise<void>;onMarkCash:(c:CashCollection)=>Promise<void>}) {
   const [reason,setReason]=useState("");const [saving,setSaving]=useState(false);const [freightCollected,setFreightCollected]=useState(false);
   async function runAction(action:()=>Promise<void>){if(saving)return;setSaving(true);try{await action();}finally{setSaving(false);}}
@@ -718,7 +738,8 @@ function MissionModal({mission,driverPosition,items,checks,pendingCash,cashBusy,
   return <Modal title="جزئیات مأموریت" onClose={onClose}><div className="form-stack">
     <div className="card-top"><strong>سفارش #{mission.order?.order_number?.toLocaleString("fa-IR")||"—"}</strong><Status value={mission.status}/></div>
     <div className="detail-box"><b>{mission.customer?.full_name||"اطلاعات مشتری"}</b><p>{mission.customer?.phone ? <>تلفن اول: <a href={"tel:"+mission.customer.phone}>{mission.customer.phone}</a></> : "شماره تماس ثبت نشده است."}{mission.customer?.phone2&&<> · تلفن دوم: <a href={"tel:"+mission.customer.phone2}>{mission.customer.phone2}</a></>}</p><p>{mission.customer?.address||"آدرس ثبت نشده است."}</p>
-      {mission.customer?.latitude!=null&&mission.customer?.longitude!=null&&Number.isFinite(Number(mission.customer.latitude))&&Number.isFinite(Number(mission.customer.longitude))&&Number(mission.customer.latitude)!==0&&Number(mission.customer.longitude)!==0&&<p><a href={driverPosition&&Number.isFinite(driverPosition.latitude)&&Number.isFinite(driverPosition.longitude)?"https://nshn.ir/maps?origin="+encodeURIComponent(driverPosition.latitude+","+driverPosition.longitude)+"&destination="+encodeURIComponent(mission.customer.latitude+","+mission.customer.longitude)+"&type=drive":"https://nshn.ir/?lat="+mission.customer.latitude+"&lng="+mission.customer.longitude} target="_blank" rel="noreferrer">{driverPosition?"شروع مسیریابی با نشان":"نمایش مقصد ثبت‌شده در نشان"}</a></p>}
+      {mission.customer?.latitude!=null&&mission.customer?.longitude!=null&&Number.isFinite(Number(mission.customer.latitude))&&Number.isFinite(Number(mission.customer.longitude))&&Number(mission.customer.latitude)!==0&&Number(mission.customer.longitude)!==0&&<button type="button" className="primary-button" onClick={()=>openNeshanRoute(Number(mission.customer!.latitude),Number(mission.customer!.longitude),driverPosition)}>🚚 شروع مسیریابی در نشان</button>}
+      {(!mission.customer?.latitude||!mission.customer?.longitude)&&<small className="muted">برای این سفارش مقصد روی نقشه ثبت نشده؛ دکمه مسیریابی نمایش داده نمی‌شود.</small>}
       <p>کرایه مشتری: {money(mission.order?.freight_toman)}</p><p>کرایه راننده: {money(mission.order?.driver_freight_toman)}</p><p>مانده نقدی: {money(mission.order?.customer_cash_balance_toman)}</p></div>
     <SectionTitle title="اقلام سفارش"/>
     {items.map(it=><div className="item-edit" key={it.id}><b>{it.item?.mattress_name||"کالای سفارش"}</b><span>تعداد سفارش: {it.ordered_quantity.toLocaleString("fa-IR")}</span>
