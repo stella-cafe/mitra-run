@@ -244,15 +244,6 @@ function SellerPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
   useEffect(()=>{const timer=window.setInterval(async()=>{const [r,m]=await Promise.all([supabase.from("driver_locations").select("driver_id,latitude,longitude,updated_at"),supabase.from("missions").select("order_id,status").order("created_at",{ascending:false}).limit(200)]);if(!r.error)setDriverLocations((r.data||[]) as DriverLocation[]);if(!m.error){const statusMap=new Map<string,string>();for(const x of m.data||[])if(!statusMap.has(x.order_id))statusMap.set(x.order_id,x.status);setOrders(prev=>prev.map(o=>({...o,status:statusMap.get(o.id)||o.status})));}},15000);return()=>window.clearInterval(timer);},[]);
 
 
-  async function assign(order:Order,driverId:string) {
-    try {
-      const rate=await supabase.from("driver_freight_rates").select("amount_toman").lte("effective_from",new Date().toISOString()).order("effective_from",{ascending:false}).limit(1).maybeSingle();
-      if(rate.error)throw rate.error;
-      if(rate.data){const snapshot=await supabase.from("orders").update({driver_freight_toman:rate.data.amount_toman}).eq("id",order.id);if(snapshot.error)throw snapshot.error;}
-      const {error}=await supabase.rpc("seller_assign_order",{p_order_id:order.id,p_driver_id:driverId}); if(error) throw error;
-      setNotice("سفارش با موفقیت به راننده ارجاع شد."); setAssigning(null); await load();
-    } catch(e){setError(errorMessage(e,"ارجاع سفارش ناموفق بود."));}
-  }
   async function deleteOrder(order:Order){
     if(order.status!=="registered"){setError("فقط سفارش ثبت‌شده و ارجاع‌نشده قابل حذف است.");return;}
     try{
@@ -516,11 +507,6 @@ function JalaliDateTimeField({value,onChange}:{value:string;onChange:(v:string)=
 }
 
 function Field({label,value,set,type="text",required=false}:{label:string;value:string;set:(v:string)=>void;type?:string;required?:boolean}){return <label>{label}<input type={type} min={type==="number"?"0":undefined} value={value} onChange={e=>set(e.target.value)} required={required}/></label>;}
-function AssignModal({order,drivers,onClose,onAssign}:{order:Order;drivers:Driver[];onClose:()=>void;onAssign:(o:Order,id:string)=>Promise<void>}) {
-  const [id,setId]=useState(drivers[0]?.id||"");const [busy,setBusy]=useState(false);
-  return <Modal title={`ارجاع سفارش #${order.order_number}`} onClose={onClose}><div className="form-stack"><label>انتخاب راننده<select value={id} onChange={e=>setId(e.target.value)}>{drivers.map(d=><option key={d.id} value={d.id}>{d.full_name} {d.phone||""}</option>)}</select></label>
-    {!drivers.length&&<p className="muted">راننده فعال پیدا نشد.</p>}<div className="modal-actions"><button className="secondary-button" onClick={onClose}>انصراف</button><button className="primary-button" disabled={!id||busy} onClick={async()=>{setBusy(true);try{await onAssign(order,id);}finally{setBusy(false);}}}>{busy?"در حال ارجاع…":"تأیید ارجاع"}</button></div></div></Modal>;
-}
 function ReviewModal({check,onClose,onSubmit}:{check:Check;onClose:()=>void;onSubmit:(c:Check,a:boolean,n:string)=>Promise<void>}) {
   const [note,setNote]=useState("");const [busy,setBusy]=useState(false);
   return <Modal title="بررسی چک مشتری" onClose={onClose}><div className="form-stack"><p>مبلغ: <b>{money(check.total_amount_toman)}</b></p><p>تعداد: <b>{check.check_count.toLocaleString("fa-IR")} فقره</b></p><p className="muted">راننده تأیید کرده است؛ تصویر چک در این سامانه دریافت نمی‌شود.</p><label>یادداشت بررسی<textarea rows={3} value={note} onChange={e=>setNote(e.target.value)}/></label><div className="modal-actions"><button className="secondary-button" onClick={onClose}>انصراف</button><button className="danger-button" disabled={busy} onClick={async()=>{setBusy(true);try{await onSubmit(check,false,note);}finally{setBusy(false);}}}>رد چک</button><button className="primary-button" disabled={busy} onClick={async()=>{setBusy(true);try{await onSubmit(check,true,note);}finally{setBusy(false);}}}>{busy?"در حال ثبت…":"تأیید چک"}</button></div></div></Modal>;
