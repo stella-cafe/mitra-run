@@ -160,14 +160,14 @@ export default function App() {
   }
 
   if (loading) return <div className="loading-screen"><Loader2 className="spin" size={36}/><p>در حال آماده‌سازی مسیرها…</p><strong>هر مسیر، یک قدم به مقصد</strong><small>Every route brings us closer.</small></div>;
-  if (!session || !profile) return <main className="login-page"><form className="login-card" onSubmit={login}>
+  if (!session || !profile) return <main className="login-page"><form className="login-card" onSubmit={login} autoComplete="on">
     <div className="brand-icon"><Truck size={34}/></div><h1>GO</h1>
     <p className="subtitle">سامانه هوشمند مدیریت مسیرها و ارسال</p>
-    <label>ایمیل</label><input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="ایمیل حساب کاربری" autoComplete="username" required/>
-    <label>رمز عبور</label><div style={{display:"flex",gap:8,alignItems:"center"}}><input style={{flex:1}} type={showPassword?"text":"password"} value={password} onChange={e=>setPassword(e.target.value)} placeholder="رمز عبور" autoComplete="current-password" required/><button type="button" className="icon-button" aria-label={showPassword?"پنهان کردن رمز عبور":"نمایش رمز عبور"} onClick={()=>setShowPassword(v=>!v)}>{showPassword?<EyeOff size={18}/>:<Eye size={18}/>}</button></div>
+    <label>ایمیل</label><input type="email" name="username" value={email} onChange={e=>setEmail(e.target.value)} placeholder="ایمیل حساب کاربری" autoComplete="username" required/>
+    <label>رمز عبور</label><div style={{display:"flex",gap:8,alignItems:"center"}}><input style={{flex:1}} type={showPassword?"text":"password"} name="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="رمز عبور" autoComplete="current-password" required/><button type="button" className="icon-button" aria-label={showPassword?"پنهان کردن رمز عبور":"نمایش رمز عبور"} onClick={()=>setShowPassword(v=>!v)}>{showPassword?<EyeOff size={18}/>:<Eye size={18}/>}</button></div>
     {error && <div className="error">{error}</div>}
     <button className="primary-button" disabled={busy}>{busy ? "در حال ورود..." : "ورود به سامانه"}</button>
-    <span className="version">GO • VERSION 1.1</span>
+    <span className="version">ایمیل به‌خاطر سپرده می‌شود؛ برای ذخیره امن رمز، پیشنهاد مرورگر را تأیید کنید.</span>
   </form></main>;
 
   return <main className="app-shell">
