@@ -564,7 +564,7 @@ function DriverPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
   const [ledger,setLedger]=useState<Ledger[]>([]); const [cashCollections,setCashCollections]=useState<CashCollection[]>([]); const [cashBusy,setCashBusy]=useState<string|null>(null); const [checksByOrder,setChecksByOrder]=useState<Record<string,CustomerCheck[]>>({}); const [busy,setBusy]=useState(false);
   const [visitOpen,setVisitOpen]=useState(false); const [activeMission,setActiveMission]=useState<string|null>(null);
   const [contactsOpen,setContactsOpen]=useState(false);const [positionOpen,setPositionOpen]=useState(false);
-  const [driverPosition,setDriverPosition]=useState<{latitude:number;longitude:number}|null>(null);const [tracking,setTracking]=useState(false);const [lastLocationAt,setLastLocationAt]=useState<string|null>(null);const locationWatch=useRef<number|null>(null);const locationNotified=useRef(false);const lastLocationWrite=useRef(0);const trackingBusy=useRef(false);
+  const [driverPosition,setDriverPosition]=useState<{latitude:number;longitude:number}|null>(null);const [tracking,setTracking]=useState(false);const [lastLocationAt,setLastLocationAt]=useState<string|null>(null);const locationWatch=useRef<number|null>(null);const locationRefresh=useRef<number|null>(null);const locationNotified=useRef(false);const lastLocationWrite=useRef(0);const trackingBusy=useRef(false);
   const load=useCallback(async()=>{
     setBusy(true);setError("");
     try{
@@ -641,7 +641,7 @@ function DriverPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
   async function saveCurrentLocation(){
     if(!navigator.geolocation){setError("این مرورگر مکان‌یابی ندارد؛ از انتخاب مبدأ دستی استفاده کنید.");setPositionOpen(true);return;}
     if(!window.isSecureContext){setError("برای ردیابی زنده، سایت باید با HTTPS باز شود.");setPositionOpen(true);return;}
-    if(locationWatch.current!==null){navigator.geolocation.clearWatch(locationWatch.current);locationWatch.current=null;}
+    if(locationWatch.current!==null){navigator.geolocation.clearWatch(locationWatch.current);locationWatch.current=null;}if(locationRefresh.current!==null){window.clearInterval(locationRefresh.current);locationRefresh.current=null;}
     locationNotified.current=false;trackingBusy.current=false;setTracking(false);setError("");setNotice("درخواست مکان‌یابی ارسال شد؛ اجازه دسترسی مرورگر را تأیید کنید.");
     const onPosition=async(pos:GeolocationPosition)=>{
       const point={latitude:pos.coords.latitude,longitude:pos.coords.longitude};
@@ -655,12 +655,13 @@ function DriverPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
       if(err.code===1){setTracking(false);setError("دسترسی مکان‌یابی رد شده است؛ مجوز Location مرورگر را فعال کنید.");}
       else if(!locationNotified.current){setError("در دریافت موقعیت وقفه افتاده است؛ مرورگر ممکن است موقتاً GPS یا شبکه مکان‌یابی را از دست داده باشد. ردیابی با دریافت موقعیت بعدی ادامه پیدا می‌کند.");}
     },{enableHighAccuracy:true,timeout:30000,maximumAge:0});
+    locationRefresh.current=window.setInterval(()=>{if(document.visibilityState==="visible")navigator.geolocation.getCurrentPosition(onPosition,()=>{}, {enableHighAccuracy:true,timeout:20000,maximumAge:0});},30000);
     setTracking(true);
   }
   useEffect(()=>{
     const resume=()=>{if(document.visibilityState==="visible"&&locationWatch.current!==null&&navigator.geolocation){navigator.geolocation.getCurrentPosition(pos=>{void persistDriverPoint({latitude:pos.coords.latitude,longitude:pos.coords.longitude},false);},()=>{}, {enableHighAccuracy:true,timeout:20000,maximumAge:0});}};
     document.addEventListener("visibilitychange",resume);
-    return()=>{document.removeEventListener("visibilitychange",resume);if(locationWatch.current!==null)navigator.geolocation.clearWatch(locationWatch.current);locationWatch.current=null;setTracking(false);};
+    return()=>{document.removeEventListener("visibilitychange",resume);if(locationWatch.current!==null)navigator.geolocation.clearWatch(locationWatch.current);if(locationRefresh.current!==null)window.clearInterval(locationRefresh.current);locationWatch.current=null;locationRefresh.current=null;};
   },[]);
   async function deleteExtraJob(job:ExtraJob){if(!window.confirm("مسیر «"+job.title+"» و کرایه وابسته آن حذف شود؟"))return;try{const {error}=await supabase.rpc("go_delete_extra_job",{p_job_id:job.id});if(error)throw error;setNotice("مسیر و کرایه وابسته حذف شدند.");await load();}catch(e){setError(errorMessage(e,"حذف مسیر ناموفق بود."));}}
   async function completeExtraJob(job:ExtraJob){try{const {error}=await supabase.rpc("go_driver_complete_extra_job",{p_job_id:job.id});if(error)throw error;setNotice(job.job_type==="store_round_trip"?"رفت‌وبرگشت انجام شد و کرایه به حساب شما اضافه شد.":"مراجعه ثبت شد و برای تأیید فروشنده ارسال شد.");await load();}catch(e){setError(errorMessage(e,"ثبت پایان مسیر ویژه ناموفق بود."));}}
