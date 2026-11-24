@@ -467,7 +467,35 @@ function MapPicker({latitude,longitude,onChange}:{latitude:number|null;longitude
     return()=>{cancelled=true;if(map.current){map.current.remove();map.current=null;pin.current=null;}};
   },[]);
   useEffect(()=>{if(map.current&&latitude!==null&&longitude!==null){const L=(window as any).L;if(pin.current)pin.current.setLatLng([latitude,longitude]);else{pin.current=L.marker([latitude,longitude],{draggable:true}).addTo(map.current);pin.current.on("dragend",(ev:any)=>{const p=ev.target.getLatLng();latest.current.onChange(Number(p.lat.toFixed(7)),Number(p.lng.toFixed(7)));});}map.current.setView([latitude,longitude],16);}},[latitude,longitude]);
-  async function search(){if(!query.trim())return;setSearching(true);setMapError("");try{const normalizedQuery=query.trim().replace(/[يى]/g,"ی").replace(/ك/g,"ک");const response=await fetch("https://photon.komoot.io/api/?q="+encodeURIComponent(normalizedQuery)+"&lang=fa&limit=10&lat=36.2972&lon=59.6067&zoom=12&bbox=44,25,63.5,40");if(!response.ok)throw new Error("سرویس جست‌وجوی نشانی پاسخ نداد.");const data=await response.json();const list=(data.features||[]).map((f:any)=>({name:[f.properties?.name,f.properties?.street,f.properties?.district,f.properties?.city,f.properties?.state].filter(Boolean).join("، "),lat:Number(f.geometry.coordinates[1]),lng:Number(f.geometry.coordinates[0])})).filter((x:any)=>Number.isFinite(x.lat)&&Number.isFinite(x.lng));setResults(list);if(!list.length)setMapError("نشانی پیدا نشد؛ نام خیابان یا محله را دقیق‌تر بنویسید.");}catch(e){setMapError(errorMessage(e,"جست‌وجوی نشانی ناموفق بود."));}finally{setSearching(false);}}
+  async function search(){
+    const term=query.trim().replace(/[يى]/g,"ی").replace(/ك/g,"ک").replace(/[۰-۹]/g,d=>String("۰۱۲۳۴۵۶۷۸۹".indexOf(d))).replace(/[٠-٩]/g,d=>String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
+    if(!term)return;
+    setSearching(true);setMapError("");setResults([]);
+    const normalize=(rows:any[],source:"photon"|"nominatim")=>rows.map((f:any)=>{
+      const p=source==="photon"?f.properties||{}:f.address||{};
+      const lat=source==="photon"?Number(f.geometry?.coordinates?.[1]):Number(f.lat);
+      const lng=source==="photon"?Number(f.geometry?.coordinates?.[0]):Number(f.lon);
+      const name=source==="photon"?[p.name,p.street,p.housenumber,p.district,p.city,p.state,p.country].filter(Boolean).join("، "):[f.name||f.display_name].filter(Boolean).join("، ");
+      return {name,lat,lng};
+    }).filter((x:any)=>Number.isFinite(x.lat)&&Number.isFinite(x.lng)&&x.lat>=24&&x.lat<=40&&x.lng>=44&&x.lng<=64);
+    try{
+      let list:{name:string;lat:number;lng:number}[]=[];
+      const photonParams=new URLSearchParams({q:term,lang:"fa",limit:"10",lat:"36.2972",lon:"59.6067",zoom:"13",countrycode:"IR"});
+      try{
+        const photon=await fetch("https://photon.komoot.io/api/?"+photonParams.toString(),{headers:{Accept:"application/json"}});
+        if(photon.ok){const data=await photon.json();list=normalize(data.features||[],"photon");}
+      }catch{}
+      if(!list.length){
+        const nominatimParams=new URLSearchParams({q:term,format:"jsonv2",addressdetails:"1",limit:"8","accept-language":"fa",countrycodes:"ir",viewbox:"60.2,36.6,59.0,35.7"});
+        const nominatim=await fetch("https://nominatim.openstreetmap.org/search?"+nominatimParams.toString(),{headers:{Accept:"application/json"}});
+        if(!nominatim.ok)throw new Error("سرویس‌های جست‌وجوی نشانی پاسخ ندادند. چند لحظه بعد دوباره امتحان کنید.");
+        list=normalize(await nominatim.json(),"nominatim");
+      }
+      setResults(list);
+      if(!list.length)setMapError("نشانی پیدا نشد. نام خیابان را همراه نام شهر وارد کنید؛ مثلاً خیابان احمدآباد، مشهد.");
+    }catch(e){setMapError(errorMessage(e,"جست‌وجوی نشانی ناموفق بود. می‌توانید مستقیماً روی نقشه نقطه بزنید."));}
+    finally{setSearching(false);}
+  }
   function choose(x:{name:string;lat:number;lng:number}){const L=(window as any).L;if(map.current&&L){if(pin.current)pin.current.setLatLng([x.lat,x.lng]);else{pin.current=L.marker([x.lat,x.lng],{draggable:true}).addTo(map.current);pin.current.on("dragend",(ev:any)=>{const p=ev.target.getLatLng();latest.current.onChange(Number(p.lat.toFixed(7)),Number(p.lng.toFixed(7)));});}map.current.setView([x.lat,x.lng],17);}latest.current.onChange(x.lat,x.lng);setQuery(x.name);setResults([]);}
   return <div className="map-picker"><b>انتخاب موقعیت مشتری</b><small>نام شهر، خیابان، کوچه یا محله را به فارسی جست‌وجو کنید؛ یا روی نقشه نقطه بزنید. جست‌وجو در محدوده ایران انجام می‌شود.</small><div className="map-search"><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="نام شهر، محله، خیابان یا کوچه در ایران…" onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();search();}}}/><button type="button" className="primary-small" disabled={searching||!query.trim()} onClick={search}>{searching?"…":"جست‌وجو"}</button></div>{results.length>0&&<div className="map-results">{results.map((x,i)=><button type="button" key={i} onClick={()=>choose(x)}>{x.name||"موقعیت پیدا شده"}</button>)}</div>}<div ref={element} className="map-canvas"/>{mapError&&<small className="error">{mapError}</small>}<small>{latitude!==null&&longitude!==null?("مختصات: "+latitude.toFixed(6)+", "+longitude.toFixed(6)):"موقعیت هنوز انتخاب نشده است."}</small>{latitude!==null&&longitude!==null&&<a className="neshan-link" href={"https://nshn.ir/?lat="+latitude+"&lng="+longitude} target="_blank" rel="noreferrer">باز کردن موقعیت در نشان</a>}</div>;
 }
@@ -540,8 +568,8 @@ function DriverPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
   const load=useCallback(async()=>{
     setBusy(true);setError("");
     try{
-      const [m,extraResult]=await Promise.all([supabase.from("missions").select("*").eq("driver_id",profile.id).neq("status","cancelled").order("created_at",{ascending:false}).limit(200),supabase.from("driver_extra_jobs").select("*").eq("driver_id",profile.id).is("deleted_at",null).order("created_at",{ascending:false}).limit(100)]);
-      if(m.error)throw m.error;if(extraResult.error)throw extraResult.error;setExtraJobs((extraResult.data||[]) as ExtraJob[]);
+      const [m,extraResult,locationResult]=await Promise.all([supabase.from("missions").select("*").eq("driver_id",profile.id).neq("status","cancelled").order("created_at",{ascending:false}).limit(200),supabase.from("driver_extra_jobs").select("*").eq("driver_id",profile.id).is("deleted_at",null).order("created_at",{ascending:false}).limit(100),supabase.from("driver_locations").select("latitude,longitude").eq("driver_id",profile.id).maybeSingle()]);
+      if(m.error)throw m.error;if(extraResult.error)throw extraResult.error;if(locationResult.error)throw locationResult.error;setExtraJobs((extraResult.data||[]) as ExtraJob[]);if(locationResult.data)setDriverPosition({latitude:Number(locationResult.data.latitude),longitude:Number(locationResult.data.longitude)});
       const allLedger = await fetchAllLedger(profile.id);
       const ledgerOrderIds=[...new Set(allLedger.map(x=>x.order_id).filter(Boolean) as string[])];
       let ledgerDetails=new Map<string,{name:string;address:string}>();
@@ -599,13 +627,30 @@ function DriverPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
     while(remaining.length){let best=0,bestDistance=Infinity;remaining.forEach((m,i)=>{const d=distanceKm(current,{latitude:m.customer!.latitude as number,longitude:m.customer!.longitude as number});if(d<bestDistance){best=i;bestDistance=d;}});const next=remaining.splice(best,1)[0];ordered.push(next);current={latitude:next.customer!.latitude as number,longitude:next.customer!.longitude as number};}
     return [...ordered,...missing];
   },[missions,driverPosition]);
+  async function persistDriverPoint(point:{latitude:number;longitude:number}){
+    if(!Number.isFinite(point.latitude)||!Number.isFinite(point.longitude)||point.latitude<24||point.latitude>40||point.longitude<44||point.longitude>64){setError("مختصات انتخاب‌شده معتبر نیست؛ یک نقطه داخل ایران انتخاب کنید.");return false;}
+    const r=await supabase.from("driver_locations").upsert({driver_id:profile.id,latitude:point.latitude,longitude:point.longitude,updated_at:new Date().toISOString()},{onConflict:"driver_id"});
+    if(r.error){setError("موقعیت دریافت شد اما در سرور ذخیره نشد: "+errorMessage(r.error));return false;}
+    setDriverPosition(point);lastLocationWrite.current=Date.now();setNotice("موقعیت راننده ذخیره شد و در پنل فروشنده نمایش داده می‌شود.");return true;
+  }
+  async function saveManualDriverLocation(){
+    if(!driverPosition){setError("ابتدا روی نقشه یک نقطه انتخاب کنید.");return;}
+    if(await persistDriverPoint(driverPosition))setPositionOpen(false);
+  }
   async function saveCurrentLocation(){
-    if(!navigator.geolocation){setError("مرورگر شما مکان‌یابی را پشتیبانی نمی‌کند. از Safari یا Chrome به‌روز و سایت HTTPS استفاده کنید.");return;}
-    if(!window.isSecureContext){setError("برای دریافت موقعیت، سایت باید با اتصال امن HTTPS باز شود.");return;}
+    if(!navigator.geolocation){setError("این مرورگر مکان‌یابی ندارد؛ از «انتخاب مبدأ دستی» و جست‌وجوی نشانی استفاده کنید.");setPositionOpen(true);return;}
+    if(!window.isSecureContext){setError("برای مکان‌یابی خودکار باید سایت با HTTPS باز شود؛ فعلاً مبدأ را دستی روی نقشه انتخاب کنید.");setPositionOpen(true);return;}
     if(locationWatch.current!==null){navigator.geolocation.clearWatch(locationWatch.current);locationWatch.current=null;}
-    locationNotified.current=false;setError("");setNotice("درخواست موقعیت ارسال شد؛ لطفاً اجازه مکان‌یابی مرورگر را تأیید کنید.");
-    const persist=async(pos:GeolocationPosition)=>{const point={latitude:pos.coords.latitude,longitude:pos.coords.longitude};setDriverPosition(point);const r=await supabase.from("driver_locations").upsert({driver_id:profile.id,latitude:point.latitude,longitude:point.longitude,updated_at:new Date().toISOString()},{onConflict:"driver_id"});if(r.error){setError("موقعیت دریافت شد اما در سرور ذخیره نشد: "+errorMessage(r.error));return;}setNotice("موقعیت راننده با موفقیت دریافت و در پنل فروشنده ذخیره شد.");lastLocationWrite.current=Date.now();};
-    navigator.geolocation.getCurrentPosition(async pos=>{await persist(pos);if(locationWatch.current!==null)navigator.geolocation.clearWatch(locationWatch.current);locationWatch.current=navigator.geolocation.watchPosition(async next=>{if(Date.now()-lastLocationWrite.current<15000)return;await persist(next);},err=>{if(!locationNotified.current){locationNotified.current=true;setError("موقعیت اولیه ذخیره شد؛ به‌روزرسانی زنده متوقف شد: "+(err.code===3?"مهلت دریافت موقعیت تمام شد":err.message));}},{enableHighAccuracy:false,timeout:60000,maximumAge:15000});},err=>{const msg=err.code===1?"دسترسی مکان‌یابی رد شده است؛ در تنظیمات مرورگر، Location را برای این سایت فعال کنید.":err.code===2?"موقعیت فعلی در دسترس نیست؛ GPS و خدمات مکان‌یابی دستگاه را روشن کنید.":"دریافت موقعیت بیش از زمان مجاز طول کشید؛ اینترنت و GPS را بررسی کنید و دوباره بزنید.";setError(msg);setNotice("");},{enableHighAccuracy:false,timeout:60000,maximumAge:30000});
+    locationNotified.current=false;setError("");setNotice("درخواست مکان‌یابی ارسال شد؛ اجازه دسترسی مرورگر را تأیید کنید.");
+    const persist=async(pos:GeolocationPosition)=>{const ok=await persistDriverPoint({latitude:pos.coords.latitude,longitude:pos.coords.longitude});return ok;};
+    navigator.geolocation.getCurrentPosition(async pos=>{
+      const ok=await persist(pos);if(!ok)return;
+      if(locationWatch.current!==null)navigator.geolocation.clearWatch(locationWatch.current);
+      locationWatch.current=navigator.geolocation.watchPosition(async next=>{if(Date.now()-lastLocationWrite.current<15000)return;await persist(next);},err=>{if(!locationNotified.current){locationNotified.current=true;setError("موقعیت اولیه ذخیره شد؛ به‌روزرسانی زنده متوقف شد: "+(err.code===3?"مهلت دریافت موقعیت تمام شد":err.message));}},{enableHighAccuracy:false,timeout:60000,maximumAge:15000});
+    },err=>{
+      const msg=err.code===1?"دسترسی مکان‌یابی رد شده است؛ مجوز Location مرورگر را فعال کنید.":err.code===2?"مرورگر نتوانست موقعیت شبکه یا دستگاه را پیدا کند (ممکن است سرویس مکان‌یابی Google با خطای 403 مسدود باشد). مبدأ را از روی نقشه انتخاب کنید.":"دریافت موقعیت خودکار Timeout شد؛ مبدأ را با جست‌وجوی نشانی یا لمس نقشه ثبت کنید.";
+      setError(msg);setNotice("");if(err.code===2||err.code===3)setPositionOpen(true);
+    },{enableHighAccuracy:false,timeout:60000,maximumAge:30000});
   }
   useEffect(()=>()=>{if(locationWatch.current!==null)navigator.geolocation.clearWatch(locationWatch.current);},[]);
   async function deleteExtraJob(job:ExtraJob){if(!window.confirm("مسیر «"+job.title+"» و کرایه وابسته آن حذف شود؟"))return;try{const {error}=await supabase.rpc("go_delete_extra_job",{p_job_id:job.id});if(error)throw error;setNotice("مسیر و کرایه وابسته حذف شدند.");await load();}catch(e){setError(errorMessage(e,"حذف مسیر ناموفق بود."));}}
@@ -635,7 +680,7 @@ function DriverPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
       <div className="stack">{(tab==="home"?todayMissions:archivedMissions).map(m=><MissionCard key={m.id} mission={m} items={items[m.id]||[]} onOpen={()=>setActiveMission(m.id)}/>)}
       {!(tab==="home"?todayMissions:archivedMissions).length&&<Empty text={tab==="home"?"امروز مأموریتی به شما ارجاع نشده است.":"مأموریت بایگانی‌شده‌ای وجود ندارد."}/>}</div>
       {activeMission&&<MissionModal mission={missions.find(m=>m.id===activeMission)!} driverPosition={driverPosition} items={items[activeMission]||[]} checks={checksByOrder[missions.find(m=>m.id===activeMission)!.order_id]||[]} pendingCash={cashCollections.filter(c=>c.order_id===missions.find(m=>m.id===activeMission)!.order_id)} cashBusy={cashBusy} onClose={()=>setActiveMission(null)} onStatus={status} onUpdateItem={updateItem} onComplete={complete} onConfirmCheck={confirmCheck} onMarkCash={markCash}/>}
-      {positionOpen&&<Modal title="تعیین موقعیت شروع مسیر" onClose={()=>setPositionOpen(false)}><div className="form-stack"><p className="muted">نقطه شروع خود را روی نقشه لمس کنید؛ نشانی‌های تگ‌شده از نزدیک‌ترین به دورترین مرتب می‌شوند.</p><MapPicker latitude={driverPosition?.latitude??null} longitude={driverPosition?.longitude??null} onChange={(latitude,longitude)=>setDriverPosition({latitude,longitude})}/><button className="small-button" onClick={saveCurrentLocation}>استفاده از موقعیت فعلی من</button><button className="primary-button" disabled={!driverPosition} onClick={()=>setPositionOpen(false)}>ثبت مبدأ مسیر</button></div></Modal>}
+      {positionOpen&&<Modal title="تعیین موقعیت شروع مسیر" onClose={()=>setPositionOpen(false)}><div className="form-stack"><p className="muted">نقطه شروع خود را روی نقشه لمس کنید؛ نشانی‌های تگ‌شده از نزدیک‌ترین به دورترین مرتب می‌شوند.</p><MapPicker latitude={driverPosition?.latitude??null} longitude={driverPosition?.longitude??null} onChange={(latitude,longitude)=>setDriverPosition({latitude,longitude})}/><button className="small-button" onClick={saveCurrentLocation}>استفاده از موقعیت فعلی من</button><button className="primary-button" disabled={!driverPosition} onClick={saveManualDriverLocation}>ذخیره مبدأ راننده</button></div></Modal>}
     </>}
     {tab==="extras"&&<><SectionTitle title="مسیرها و هزینه‌های ویژه" sub="رفت‌وبرگشت‌های تعریف‌شده توسط فروشنده و مراجعه‌های منتظر تأیید" action={<button className="primary-small" onClick={()=>setVisitOpen(true)}><Plus size={15}/> ثبت مراجعه به انبار دیگر</button>}/><div className="stack">{extraJobs.map(j=><div className="data-card" key={j.id}><div className="card-top"><b>{j.title}</b><Status value={j.status==="pending_approval"?"awaiting_seller":j.status}/></div><p>{j.address||"آدرس ثبت نشده"} · {money(j.amount_toman)}</p>{j.notes&&<small>{j.notes}</small>}{j.status==="assigned"&&<button className="primary-small" onClick={()=>completeExtraJob(j)}>{j.job_type==="store_round_trip"?"مسیر انجام شد؛ ثبت کرایه":"مسیر انجام شد؛ ارسال برای تأیید"}</button>}{j.status==="pending_approval"&&<small className="muted">در انتظار تأیید فروشنده؛ هنوز به حساب اضافه نشده است.</small>}{j.review_note&&<small>{j.review_note}</small>}{j.status!=="approved"&&j.status!=="rejected"&&<div className="card-bottom"><button className="danger-button" onClick={()=>deleteExtraJob(j)}>حذف مسیر</button></div>}</div>)}{!extraJobs.length&&<Empty text="مسیر ویژه‌ای ثبت نشده است."/>}</div>{visitOpen&&<WarehouseModal onClose={()=>setVisitOpen(false)} onDone={()=>{setVisitOpen(false);setNotice("درخواست هزینه برای تأیید فروشنده ثبت شد.");load();}} onError={setError}/>}</>}
     {tab==="finance"&&<><SectionTitle title="حساب راننده" sub="گردش حساب و کرایه‌های ثبت‌شده"/><div className="balance-card"><span>مانده حساب</span><strong>{money(ledger.reduce((s,x)=>s+x.amount_toman,0))}</strong></div><div className="stack">{ledger.map(x=><div className="data-card compact" key={x.id}><div className="card-top"><strong>{ledgerLabel(x.entry_type,x.description||"")}</strong><b className={x.amount_toman<0?"negative":"positive"}>{money(x.amount_toman)}</b></div><p>{x.description||"—"}</p><small>{dateText(x.created_at)}</small></div>)}{!ledger.length&&<Empty text="تراکنشی ثبت نشده است."/>}</div></>}
