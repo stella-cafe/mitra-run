@@ -466,9 +466,32 @@ function MapPicker({latitude,longitude,onChange}:{latitude:number|null;longitude
 }
 
 function DriverLocationsMap({locations,drivers}:{locations:DriverLocation[];drivers:Driver[]}) {
-  const element=useRef<HTMLDivElement|null>(null);const map=useRef<any>(null);
-  useEffect(()=>{let cancelled=false;const init=()=>{const L=(window as any).L;if(cancelled||!L||!element.current)return;if(map.current)map.current.remove();const points=locations;const center: [number,number]=points.length?[points[0].latitude,points[0].longitude]:[36.2972,59.6067];map.current=L.map(element.current).setView(center,points.length?11:12);L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",{subdomains:"abcd",maxZoom:20,attribution:"© OpenStreetMap © CARTO"}).addTo(map.current);for(const p of points){const driver=drivers.find(d=>d.id===p.driver_id);const marker=L.circleMarker([p.latitude,p.longitude],{radius:10,color:"#ffffff",weight:3,fillColor:"#075bff",fillOpacity:1}).addTo(map.current);marker.bindPopup("<b>"+(driver?.full_name||"راننده")+"</b><br/>آخرین ثبت: "+dateText(p.updated_at));}if(points.length>1)map.current.fitBounds(points.map(p=>[p.latitude,p.longitude]),{padding:[25,25]});setTimeout(()=>map.current&&map.current.invalidateSize(),100);};const w=window as any;if(w.L)init();else{let script=document.getElementById("mitra-leaflet-js") as HTMLScriptElement|null;if(!script){script=document.createElement("script");script.id="mitra-leaflet-js";script.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";script.onload=init;document.body.appendChild(script);}else script.addEventListener("load",init,{once:true});}return()=>{cancelled=true;if(map.current){map.current.remove();map.current=null;}};},[locations,drivers]);
-  return <div className="map-picker"><b>موقعیت ثبت‌شده رانندگان</b><small>نقطه آبی، آخرین موقعیتی است که راننده از پنل خود ثبت کرده است.</small><div ref={element} className="map-canvas live-driver-map"/></div>;
+  const element=useRef<HTMLDivElement|null>(null);const map=useRef<any>(null);const layer=useRef<any>(null);
+  const latest=useRef({locations,drivers});latest.current={locations,drivers};
+  useEffect(()=>{
+    let cancelled=false;
+    const init=()=>{const L=(window as any).L;if(cancelled||!L||!element.current)return;
+      if(map.current)map.current.remove();
+      const points=latest.current.locations;const center:[number,number]=points.length?[points[0].latitude,points[0].longitude]:[36.2972,59.6067];
+      map.current=L.map(element.current).setView(center,points.length?14:12);
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",{subdomains:"abcd",maxZoom:20,attribution:"© OpenStreetMap © CARTO"}).addTo(map.current);
+      layer.current=L.layerGroup().addTo(map.current);
+      renderMarkers();
+      setTimeout(()=>map.current&&map.current.invalidateSize(),150);
+    };
+    const renderMarkers=()=>{const L=(window as any).L;if(!map.current||!layer.current||!L)return;layer.current.clearLayers();const points=latest.current.locations;
+      for(const p of points){const driver=latest.current.drivers.find(d=>d.id===p.driver_id);const marker=L.circleMarker([p.latitude,p.longitude],{radius:11,color:"#ffffff",weight:3,fillColor:"#075bff",fillOpacity:1}).addTo(layer.current);
+        const nav="https://nshn.ir/?lat="+encodeURIComponent(p.latitude)+"&lng="+encodeURIComponent(p.longitude);
+        marker.bindPopup("<b>"+(driver?.full_name||"راننده")+"</b><br/>آخرین ثبت: "+dateText(p.updated_at)+"<br/><a href='"+nav+"' target='_blank' rel='noreferrer'>مسیریابی با نشان</a>");
+      }
+      if(points.length===1)map.current.setView([points[0].latitude,points[0].longitude],15);
+      else if(points.length>1)map.current.fitBounds(points.map(p=>[p.latitude,p.longitude]),{padding:[25,25]});
+    };
+    const w=window as any;if(w.L)init();else{if(!document.getElementById("mitra-leaflet-css")){const css=document.createElement("link");css.id="mitra-leaflet-css";css.rel="stylesheet";css.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";document.head.appendChild(css);}let script=document.getElementById("mitra-leaflet-js") as HTMLScriptElement|null;if(!script){script=document.createElement("script");script.id="mitra-leaflet-js";script.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";script.onload=init;script.onerror=()=>{};document.body.appendChild(script);}else if(w.L)init();else script.addEventListener("load",init,{once:true});}
+    return()=>{cancelled=true;if(map.current){map.current.remove();map.current=null;layer.current=null;}};
+  },[]);
+  useEffect(()=>{const L=(window as any).L;if(!map.current||!layer.current||!L)return;layer.current.clearLayers();for(const p of locations){const driver=drivers.find(d=>d.id===p.driver_id);const marker=L.circleMarker([p.latitude,p.longitude],{radius:11,color:"#ffffff",weight:3,fillColor:"#075bff",fillOpacity:1}).addTo(layer.current);const nav="https://nshn.ir/?lat="+encodeURIComponent(p.latitude)+"&lng="+encodeURIComponent(p.longitude);marker.bindPopup("<b>"+(driver?.full_name||"راننده")+"</b><br/>آخرین ثبت: "+dateText(p.updated_at)+"<br/><a href='"+nav+"' target='_blank' rel='noreferrer'>مسیریابی با نشان</a>");}if(locations.length===1)map.current.setView([locations[0].latitude,locations[0].longitude],15);else if(locations.length>1)map.current.fitBounds(locations.map(p=>[p.latitude,p.longitude]),{padding:[25,25]});},[locations,drivers]);
+  return <div className="map-picker"><b>موقعیت زنده راننده</b><small>نقطه آبی، آخرین مختصات ثبت‌شده راننده است. برای مسیریابی، نشان را باز کنید.</small><div ref={element} className="map-canvas live-driver-map"/></div>;
 }
 
 function RoundTripModal({drivers,onClose,onSubmit}:{drivers:Driver[];onClose:()=>void;onSubmit:(driverId:string,name:string,address:string,amount:number,note:string)=>Promise<void>;}) {
