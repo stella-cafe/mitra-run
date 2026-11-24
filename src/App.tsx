@@ -236,7 +236,17 @@ function SellerPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
         setCustomers(enriched.filter(x=>!x.is_archived));
         setArchivedCustomers(enriched.filter(x=>x.is_archived||!isTodayTehran((x as any).created_at)));
       }else {setCustomers([]);setArchivedCustomers([]);}
-      setChecks(((ch.data||[]) as Check[]).filter(x=>(o.data||[]).some((order:any)=>order.id===x.order_id))); setLedger(allLedger);
+      setChecks(((ch.data||[]) as Check[]).filter(x=>(o.data||[]).some((order:any)=>order.id===x.order_id)));
+      const orderCustomer=new Map((o.data||[]).map((order:any)=>[order.id,order.customer_id]));
+      const customerById=new Map(customerRows.map(x=>[x.id,x]));
+      const extraById=new Map(((extraJobsResult.data||[]) as ExtraJob[]).map(x=>[x.id,x]));
+      const ledgerWithContext=allLedger.map(entry=>{
+        if((entry.description||"").includes("مشتری:")||(entry.description||"").includes("مقصد:"))return entry;
+        if(entry.order_id){const customer=customerById.get(orderCustomer.get(entry.order_id)||"");if(customer)return {...entry,description:[entry.description||"کرایه سفارش","مشتری: "+customer.full_name,"آدرس: "+customer.address].join(" | ")};}
+        if(entry.extra_job_id){const job=extraById.get(entry.extra_job_id);if(job)return {...entry,description:[entry.description||"کرایه مسیر","مقصد: "+job.title,"آدرس: "+(job.address||"ثبت نشده")].join(" | ")};}
+        return entry;
+      });
+      setLedger(ledgerWithContext);
     } catch(e) { setError(e instanceof Error?e.message:"بارگذاری اطلاعات ناموفق بود."); }
     finally { setBusy(false); }
   },[setError]);
@@ -526,7 +536,13 @@ function DriverPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
       const ledgerOrderIds=[...new Set(allLedger.map(x=>x.order_id).filter(Boolean) as string[])];
       let ledgerDetails=new Map<string,{name:string;address:string}>();
       if(ledgerOrderIds.length){const lo=await supabase.from("orders").select("id,customer_id").in("id",ledgerOrderIds);if(lo.error)throw lo.error;const customerIds=[...new Set((lo.data||[]).map((x:any)=>x.customer_id))];if(customerIds.length){const lc=await supabase.from("customers").select("id,full_name,address").in("id",customerIds);if(lc.error)throw lc.error;const cm=new Map((lc.data||[]).map((x:any)=>[x.id,x]));for(const o of lo.data||[]){const c:any=cm.get(o.customer_id);if(c)ledgerDetails.set(o.id,{name:c.full_name,address:c.address});}}}
-      const detailedLedger=allLedger.map(x=>{if(x.entry_type==="uncollected_freight"&&x.order_id){const c=ledgerDetails.get(x.order_id);return {...x,description:c?("مشتری: "+c.name+" | آدرس: "+c.address+" | مبلغ کرایه دریافت‌نشده: "+money(x.amount_toman)):(x.description||"کرایه دریافت‌نشده")};}return x;});
+      const extraJobMap=new Map(((extraResult.data||[]) as ExtraJob[]).map(x=>[x.id,x]));
+      const detailedLedger=allLedger.map(x=>{
+        if((x.description||"").includes("مشتری:")||(x.description||"").includes("مقصد:"))return x;
+        if(x.order_id){const c=ledgerDetails.get(x.order_id);if(c)return {...x,description:(x.description||"کرایه سفارش")+" | مشتری: "+c.name+" | آدرس: "+c.address};}
+        if(x.extra_job_id){const j=extraJobMap.get(x.extra_job_id);if(j)return {...x,description:(x.description||"کرایه مسیر")+" | مقصد: "+j.title+" | آدرس: "+(j.address||"ثبت نشده")};}
+        return x;
+      });
       const ms=(m.data||[]) as Mission[];setMissions(ms);setLedger(detailedLedger);
       const orderIds=[...new Set(ms.map(x=>x.order_id))];
       if(orderIds.length){
