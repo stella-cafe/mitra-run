@@ -1,10 +1,39 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
-<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#d9b7fa"/><stop offset="1" stop-color="#9b70c3"/></linearGradient></defs>
-<rect width="128" height="128" rx="28" fill="#17131f"/>
-<path d="M13 35h62v47H13z" fill="url(#g)" stroke="#f3e9ff" stroke-width="4" stroke-linejoin="round"/>
-<path d="M75 49h21l18 19v14H75z" fill="#c49aef" stroke="#f3e9ff" stroke-width="4" stroke-linejoin="round"/>
-<path d="M85 53v17h24" fill="none" stroke="#5a3d74" stroke-width="4"/>
-<circle cx="36" cy="87" r="12" fill="#17131f" stroke="#f3e9ff" stroke-width="5"/><circle cx="95" cy="87" r="12" fill="#17131f" stroke="#f3e9ff" stroke-width="5"/>
-<path d="M23 48h37M23 60h27" stroke="#5a3d74" stroke-width="4" stroke-linecap="round"/>
-<path d="M16 102h96" stroke="#8ee0b2" stroke-width="5" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#25213b"/>
+      <stop offset="1" stop-color="#111827"/>
+    </linearGradient>
+    <linearGradient id="truck" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#a7f3d0"/>
+      <stop offset="1" stop-color="#34d399"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity=".24"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity=".04"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="16" stdDeviation="16" flood-color="#050816" flood-opacity=".45"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <circle cx="390" cy="120" r="82" fill="#8b5cf6" opacity=".12"/>
+  <circle cx="106" cy="392" r="104" fill="#34d399" opacity=".10"/>
+  <path d="M82 374c64-38 110-46 174-36 66 10 108-8 174-54" fill="none" stroke="#a7f3d0" stroke-width="12" stroke-linecap="round" stroke-dasharray="3 28" opacity=".65"/>
+  <g filter="url(#shadow)">
+    <path d="M90 170a30 30 0 0 1 30-30h192a30 30 0 0 1 30 30v185H90z" fill="url(#truck)" stroke="#ecfdf5" stroke-width="12" stroke-linejoin="round"/>
+    <path d="M342 222h58c15 0 28 7 37 19l39 54v60H342z" fill="#6ee7b7" stroke="#ecfdf5" stroke-width="12" stroke-linejoin="round"/>
+    <path d="M366 238h31c9 0 16 4 22 12l24 33h-77z" fill="#1f2937" opacity=".9"/>
+    <path d="M108 190h176M108 220h112" stroke="#065f46" stroke-width="13" stroke-linecap="round" opacity=".55"/>
+    <path d="M90 330h386v26H90z" fill="#065f46" opacity=".18"/>
+    <circle cx="178" cy="360" r="38" fill="#111827" stroke="#ecfdf5" stroke-width="12"/>
+    <circle cx="178" cy="360" r="13" fill="#a7f3d0"/>
+    <circle cx="405" cy="360" r="38" fill="#111827" stroke="#ecfdf5" stroke-width="12"/>
+    <circle cx="405" cy="360" r="13" fill="#a7f3d0"/>
+  </g>
+  <g transform="translate(330 75)">
+    <path d="M0 44c0-32 24-56 56-56s56 24 56 56c0 40-56 98-56 98S0 84 0 44z" fill="#8b5cf6" stroke="#ede9fe" stroke-width="10"/>
+    <circle cx="56" cy="43" r="19" fill="#fff"/>
+  </g>
+  <path d="M256 430h88" stroke="#a7f3d0" stroke-width="12" stroke-linecap="round" opacity=".9"/>
 </svg>
