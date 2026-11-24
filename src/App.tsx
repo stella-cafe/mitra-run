@@ -212,11 +212,11 @@ function SellerPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
     setBusy(true); setError("");
     try {
       const [o,d,c,ch,extraJobsResult,driverLocationsResult,missionResult] = await Promise.all([
-        supabase.from("orders").select("*").order("created_at",{ascending:false}).limit(100),
+        supabase.from("orders").select("*").is("deleted_at",null).order("created_at",{ascending:false}).limit(100),
         supabase.from("profiles").select("id,full_name,phone").eq("role","driver").eq("is_active",true),
         supabase.from("customers").select("id,full_name,address,notes,latitude,longitude,created_at,is_archived").order("full_name"),
         supabase.from("customer_checks").select("*").order("created_at",{ascending:false}).limit(100),
-        supabase.from("driver_extra_jobs").select("*").order("created_at",{ascending:false}).limit(100),
+        supabase.from("driver_extra_jobs").select("*").is("deleted_at",null).order("created_at",{ascending:false}).limit(100),
         supabase.from("driver_locations").select("driver_id,latitude,longitude,updated_at"),
         supabase.from("missions").select("id,order_id,status,created_at,driver_id").order("created_at",{ascending:false}).limit(200)
       ]);
@@ -236,7 +236,7 @@ function SellerPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
         setCustomers(enriched.filter(x=>!x.is_archived));
         setArchivedCustomers(enriched.filter(x=>x.is_archived||!isTodayTehran((x as any).created_at)));
       }else {setCustomers([]);setArchivedCustomers([]);}
-      setChecks((ch.data||[]) as Check[]); setLedger(allLedger);
+      setChecks(((ch.data||[]) as Check[]).filter(x=>(o.data||[]).some((order:any)=>order.id===x.order_id))); setLedger(allLedger);
     } catch(e) { setError(e instanceof Error?e.message:"بارگذاری اطلاعات ناموفق بود."); }
     finally { setBusy(false); }
   },[setError]);
@@ -520,7 +520,7 @@ function DriverPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
   const load=useCallback(async()=>{
     setBusy(true);setError("");
     try{
-      const [m,extraResult]=await Promise.all([supabase.from("missions").select("*").eq("driver_id",profile.id).order("created_at",{ascending:false}).limit(200),supabase.from("driver_extra_jobs").select("*").eq("driver_id",profile.id).order("created_at",{ascending:false}).limit(100)]);
+      const [m,extraResult]=await Promise.all([supabase.from("missions").select("*").eq("driver_id",profile.id).neq("status","cancelled").order("created_at",{ascending:false}).limit(200),supabase.from("driver_extra_jobs").select("*").eq("driver_id",profile.id).is("deleted_at",null).order("created_at",{ascending:false}).limit(100)]);
       if(m.error)throw m.error;if(extraResult.error)throw extraResult.error;setExtraJobs((extraResult.data||[]) as ExtraJob[]);
       const allLedger = await fetchAllLedger(profile.id);
       const ledgerOrderIds=[...new Set(allLedger.map(x=>x.order_id).filter(Boolean) as string[])];
