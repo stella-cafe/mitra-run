@@ -564,7 +564,7 @@ function DriverPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
   const [ledger,setLedger]=useState<Ledger[]>([]); const [cashCollections,setCashCollections]=useState<CashCollection[]>([]); const [cashBusy,setCashBusy]=useState<string|null>(null); const [checksByOrder,setChecksByOrder]=useState<Record<string,CustomerCheck[]>>({}); const [busy,setBusy]=useState(false);
   const [visitOpen,setVisitOpen]=useState(false); const [activeMission,setActiveMission]=useState<string|null>(null);
   const [contactsOpen,setContactsOpen]=useState(false);const [positionOpen,setPositionOpen]=useState(false);
-  const [driverPosition,setDriverPosition]=useState<{latitude:number;longitude:number}|null>(null);const locationWatch=useRef<number|null>(null);const locationNotified=useRef(false);const lastLocationWrite=useRef(0);
+  const [driverPosition,setDriverPosition]=useState<{latitude:number;longitude:number}|null>(null);const [tracking,setTracking]=useState(false);const [lastLocationAt,setLastLocationAt]=useState<string|null>(null);const locationWatch=useRef<number|null>(null);const locationNotified=useRef(false);const lastLocationWrite=useRef(0);const trackingBusy=useRef(false);
   const load=useCallback(async()=>{
     setBusy(true);setError("");
     try{
@@ -627,32 +627,41 @@ function DriverPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
     while(remaining.length){let best=0,bestDistance=Infinity;remaining.forEach((m,i)=>{const d=distanceKm(current,{latitude:m.customer!.latitude as number,longitude:m.customer!.longitude as number});if(d<bestDistance){best=i;bestDistance=d;}});const next=remaining.splice(best,1)[0];ordered.push(next);current={latitude:next.customer!.latitude as number,longitude:next.customer!.longitude as number};}
     return [...ordered,...missing];
   },[missions,driverPosition]);
-  async function persistDriverPoint(point:{latitude:number;longitude:number}){
-    if(!Number.isFinite(point.latitude)||!Number.isFinite(point.longitude)||point.latitude<24||point.latitude>40||point.longitude<44||point.longitude>64){setError("مختصات انتخاب‌شده معتبر نیست؛ یک نقطه داخل ایران انتخاب کنید.");return false;}
-    const r=await supabase.from("driver_locations").upsert({driver_id:profile.id,latitude:point.latitude,longitude:point.longitude,updated_at:new Date().toISOString()},{onConflict:"driver_id"});
-    if(r.error){setError("موقعیت دریافت شد اما در سرور ذخیره نشد: "+errorMessage(r.error));return false;}
-    setDriverPosition(point);lastLocationWrite.current=Date.now();setNotice("موقعیت راننده ذخیره شد و در پنل فروشنده نمایش داده می‌شود.");return true;
+  async function persistDriverPoint(point:{latitude:number;longitude:number},notify=true){
+    if(!Number.isFinite(point.latitude)||!Number.isFinite(point.longitude)||point.latitude<24||point.latitude>40||point.longitude<44||point.longitude>64){if(notify)setError("مختصات انتخاب‌شده معتبر نیست؛ یک نقطه داخل ایران انتخاب کنید.");return false;}
+    const now=new Date().toISOString();
+    const r=await supabase.from("driver_locations").upsert({driver_id:profile.id,latitude:point.latitude,longitude:point.longitude,updated_at:now},{onConflict:"driver_id"});
+    if(r.error){if(notify)setError("موقعیت دریافت شد اما در سرور ذخیره نشد: "+errorMessage(r.error));return false;}
+    setDriverPosition(point);setLastLocationAt(now);lastLocationWrite.current=Date.now();if(notify)setNotice("موقعیت راننده ذخیره شد و ردیابی زنده فعال است.");return true;
   }
   async function saveManualDriverLocation(){
     if(!driverPosition){setError("ابتدا روی نقشه یک نقطه انتخاب کنید.");return;}
     if(await persistDriverPoint(driverPosition))setPositionOpen(false);
   }
   async function saveCurrentLocation(){
-    if(!navigator.geolocation){setError("این مرورگر مکان‌یابی ندارد؛ از «انتخاب مبدأ دستی» و جست‌وجوی نشانی استفاده کنید.");setPositionOpen(true);return;}
-    if(!window.isSecureContext){setError("برای مکان‌یابی خودکار باید سایت با HTTPS باز شود؛ فعلاً مبدأ را دستی روی نقشه انتخاب کنید.");setPositionOpen(true);return;}
+    if(!navigator.geolocation){setError("این مرورگر مکان‌یابی ندارد؛ از انتخاب مبدأ دستی استفاده کنید.");setPositionOpen(true);return;}
+    if(!window.isSecureContext){setError("برای ردیابی زنده، سایت باید با HTTPS باز شود.");setPositionOpen(true);return;}
     if(locationWatch.current!==null){navigator.geolocation.clearWatch(locationWatch.current);locationWatch.current=null;}
-    locationNotified.current=false;setError("");setNotice("درخواست مکان‌یابی ارسال شد؛ اجازه دسترسی مرورگر را تأیید کنید.");
-    const persist=async(pos:GeolocationPosition)=>{const ok=await persistDriverPoint({latitude:pos.coords.latitude,longitude:pos.coords.longitude});return ok;};
-    navigator.geolocation.getCurrentPosition(async pos=>{
-      const ok=await persist(pos);if(!ok)return;
-      if(locationWatch.current!==null)navigator.geolocation.clearWatch(locationWatch.current);
-      locationWatch.current=navigator.geolocation.watchPosition(async next=>{if(Date.now()-lastLocationWrite.current<15000)return;await persist(next);},err=>{if(!locationNotified.current){locationNotified.current=true;setError("موقعیت اولیه ذخیره شد؛ به‌روزرسانی زنده متوقف شد: "+(err.code===3?"مهلت دریافت موقعیت تمام شد":err.message));}},{enableHighAccuracy:false,timeout:60000,maximumAge:15000});
-    },err=>{
-      const msg=err.code===1?"دسترسی مکان‌یابی رد شده است؛ مجوز Location مرورگر را فعال کنید.":err.code===2?"مرورگر نتوانست موقعیت شبکه یا دستگاه را پیدا کند (ممکن است سرویس مکان‌یابی Google با خطای 403 مسدود باشد). مبدأ را از روی نقشه انتخاب کنید.":"دریافت موقعیت خودکار Timeout شد؛ مبدأ را با جست‌وجوی نشانی یا لمس نقشه ثبت کنید.";
-      setError(msg);setNotice("");if(err.code===2||err.code===3)setPositionOpen(true);
-    },{enableHighAccuracy:false,timeout:60000,maximumAge:30000});
+    locationNotified.current=false;trackingBusy.current=false;setTracking(false);setError("");setNotice("درخواست مکان‌یابی ارسال شد؛ اجازه دسترسی مرورگر را تأیید کنید.");
+    const onPosition=async(pos:GeolocationPosition)=>{
+      const point={latitude:pos.coords.latitude,longitude:pos.coords.longitude};
+      if(trackingBusy.current)return;
+      if(Date.now()-lastLocationWrite.current<5000)return;
+      trackingBusy.current=true;
+      try{await persistDriverPoint(point,false);setTracking(true);if(!locationNotified.current){setNotice("ردیابی زنده فعال است؛ تا وقتی پنل راننده باز و دسترسی مکان‌یابی مجاز باشد، موقعیت به‌روزرسانی می‌شود.");locationNotified.current=true;}}
+      finally{trackingBusy.current=false;}
+    };
+    locationWatch.current=navigator.geolocation.watchPosition(onPosition,err=>{
+      if(err.code===1){setTracking(false);setError("دسترسی مکان‌یابی رد شده است؛ مجوز Location مرورگر را فعال کنید.");}
+      else if(!locationNotified.current){setError("در دریافت موقعیت وقفه افتاده است؛ مرورگر ممکن است موقتاً GPS یا شبکه مکان‌یابی را از دست داده باشد. ردیابی با دریافت موقعیت بعدی ادامه پیدا می‌کند.");}
+    },{enableHighAccuracy:true,timeout:30000,maximumAge:0});
+    setTracking(true);
   }
-  useEffect(()=>()=>{if(locationWatch.current!==null)navigator.geolocation.clearWatch(locationWatch.current);},[]);
+  useEffect(()=>{
+    const resume=()=>{if(document.visibilityState==="visible"&&locationWatch.current!==null&&navigator.geolocation){navigator.geolocation.getCurrentPosition(pos=>{void persistDriverPoint({latitude:pos.coords.latitude,longitude:pos.coords.longitude},false);},()=>{}, {enableHighAccuracy:true,timeout:20000,maximumAge:0});}};
+    document.addEventListener("visibilitychange",resume);
+    return()=>{document.removeEventListener("visibilitychange",resume);if(locationWatch.current!==null)navigator.geolocation.clearWatch(locationWatch.current);locationWatch.current=null;setTracking(false);};
+  },[]);
   async function deleteExtraJob(job:ExtraJob){if(!window.confirm("مسیر «"+job.title+"» و کرایه وابسته آن حذف شود؟"))return;try{const {error}=await supabase.rpc("go_delete_extra_job",{p_job_id:job.id});if(error)throw error;setNotice("مسیر و کرایه وابسته حذف شدند.");await load();}catch(e){setError(errorMessage(e,"حذف مسیر ناموفق بود."));}}
   async function completeExtraJob(job:ExtraJob){try{const {error}=await supabase.rpc("go_driver_complete_extra_job",{p_job_id:job.id});if(error)throw error;setNotice(job.job_type==="store_round_trip"?"رفت‌وبرگشت انجام شد و کرایه به حساب شما اضافه شد.":"مراجعه ثبت شد و برای تأیید فروشنده ارسال شد.");await load();}catch(e){setError(errorMessage(e,"ثبت پایان مسیر ویژه ناموفق بود."));}}
   async function status(m:Mission,next:string,reason?:string){
@@ -676,7 +685,7 @@ function DriverPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
   const nav=[{id:"home",label:"مأموریت‌های امروز",icon:<Truck size={17}/>},{id:"archive",label:"ماموریت‌های بایگانی‌شده",icon:<ClipboardList size={17}/>},{id:"extras",label:"مسیرهای ویژه",icon:<Warehouse size={17}/>},{id:"finance",label:"حساب من",icon:<Wallet size={17}/>}];
   return <><Nav tab={tab} setTab={setTab} items={nav}/>
     {(tab==="home"||tab==="archive")&&<><div className="stats-grid"><Stat label="کل مأموریت‌ها" value={missions.length}/><Stat label="فعال" value={missions.filter(m=>!["delivered","failed","cancelled"].includes(m.status)).length}/><Stat label="تکمیل‌شده" value={missions.filter(m=>m.status==="delivered").length}/><Stat label="مانده حساب (تومان)" value={ledger.reduce((s,x)=>s+x.amount_toman,0)}/></div>
-      <SectionTitle title="مأموریت‌های من" sub="موقعیت فعلی را ثبت کنید تا نزدیک‌ترین نشانی اول نمایش داده شود." action={<><button className="small-button" onClick={saveCurrentLocation}><MapPin size={15}/> موقعیت فعلی من</button><button className="small-button" onClick={()=>setPositionOpen(true)}><MapPin size={15}/> انتخاب مبدأ دستی</button><button className="small-button" onClick={load}><RefreshCw size={15}/> بروزرسانی</button></>}/>
+      <SectionTitle title="مأموریت‌های من" sub="موقعیت فعلی را ثبت کنید تا نزدیک‌ترین نشانی اول نمایش داده شود." action={<><button className="small-button" onClick={saveCurrentLocation}><MapPin size={15}/> {tracking?"ردیابی زنده فعال است":"شروع ردیابی زنده"}</button><button className="small-button" onClick={()=>setPositionOpen(true)}><MapPin size={15}/> انتخاب مبدأ دستی</button><button className="small-button" onClick={load}><RefreshCw size={15}/> بروزرسانی</button></>}/>
       <div className="stack">{(tab==="home"?todayMissions:archivedMissions).map(m=><MissionCard key={m.id} mission={m} items={items[m.id]||[]} onOpen={()=>setActiveMission(m.id)}/>)}
       {!(tab==="home"?todayMissions:archivedMissions).length&&<Empty text={tab==="home"?"امروز مأموریتی به شما ارجاع نشده است.":"مأموریت بایگانی‌شده‌ای وجود ندارد."}/>}</div>
       {activeMission&&<MissionModal mission={missions.find(m=>m.id===activeMission)!} driverPosition={driverPosition} items={items[activeMission]||[]} checks={checksByOrder[missions.find(m=>m.id===activeMission)!.order_id]||[]} pendingCash={cashCollections.filter(c=>c.order_id===missions.find(m=>m.id===activeMission)!.order_id)} cashBusy={cashBusy} onClose={()=>setActiveMission(null)} onStatus={status} onUpdateItem={updateItem} onComplete={complete} onConfirmCheck={confirmCheck} onMarkCash={markCash}/>}
