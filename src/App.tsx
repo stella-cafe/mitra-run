@@ -222,6 +222,13 @@ function SellerPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
       ]);
       for (const r of [o,d,c,ch,extraJobsResult,driverLocationsResult,missionResult]) if (r.error) throw r.error;
       const allLedger = await fetchAllLedger();
+      const ledgerOrderIds=[...new Set(allLedger.map(x=>x.order_id).filter(Boolean) as string[])];
+      const ledgerExtraIds=[...new Set(allLedger.map(x=>x.extra_job_id).filter(Boolean) as string[])];
+      const [ledgerOrdersResult,ledgerExtrasResult]=await Promise.all([
+        ledgerOrderIds.length?supabase.from("orders").select("id,customer_id").in("id",ledgerOrderIds):Promise.resolve({data:[],error:null}),
+        ledgerExtraIds.length?supabase.from("driver_extra_jobs").select("id,title,address").in("id",ledgerExtraIds):Promise.resolve({data:[],error:null})
+      ]);
+      if(ledgerOrdersResult.error)throw ledgerOrdersResult.error;if(ledgerExtrasResult.error)throw ledgerExtrasResult.error;
       const missionStatusByOrder=new Map<string,string>();
       for(const m of missionResult.data||[])missionStatusByOrder.set(m.order_id,m.status);
       setOrders(((o.data||[]) as Order[]).map(order=>({...order,status:missionStatusByOrder.get(order.id)||order.status}))); setDrivers((d.data||[]) as Driver[]);
@@ -237,9 +244,9 @@ function SellerPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
         setArchivedCustomers(enriched.filter(x=>x.is_archived||!isTodayTehran((x as any).created_at)));
       }else {setCustomers([]);setArchivedCustomers([]);}
       setChecks(((ch.data||[]) as Check[]).filter(x=>(o.data||[]).some((order:any)=>order.id===x.order_id)));
-      const orderCustomer=new Map((o.data||[]).map((order:any)=>[order.id,order.customer_id]));
+      const orderCustomer=new Map((ledgerOrdersResult.data||[]).map((order:any)=>[order.id,order.customer_id]));
       const customerById=new Map(customerRows.map(x=>[x.id,x]));
-      const extraById=new Map(((extraJobsResult.data||[]) as ExtraJob[]).map(x=>[x.id,x]));
+      const extraById=new Map((ledgerExtrasResult.data||[]).map((x:any)=>[x.id,x]));
       const ledgerWithContext=allLedger.map(entry=>{
         if((entry.description||"").includes("مشتری:")||(entry.description||"").includes("مقصد:"))return entry;
         if(entry.order_id){const customer=customerById.get(orderCustomer.get(entry.order_id)||"");if(customer)return {...entry,description:[entry.description||"کرایه سفارش","مشتری: "+customer.full_name,"آدرس: "+customer.address].join(" | ")};}
@@ -536,7 +543,10 @@ function DriverPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
       const ledgerOrderIds=[...new Set(allLedger.map(x=>x.order_id).filter(Boolean) as string[])];
       let ledgerDetails=new Map<string,{name:string;address:string}>();
       if(ledgerOrderIds.length){const lo=await supabase.from("orders").select("id,customer_id").in("id",ledgerOrderIds);if(lo.error)throw lo.error;const customerIds=[...new Set((lo.data||[]).map((x:any)=>x.customer_id))];if(customerIds.length){const lc=await supabase.from("customers").select("id,full_name,address").in("id",customerIds);if(lc.error)throw lc.error;const cm=new Map((lc.data||[]).map((x:any)=>[x.id,x]));for(const o of lo.data||[]){const c:any=cm.get(o.customer_id);if(c)ledgerDetails.set(o.id,{name:c.full_name,address:c.address});}}}
-      const extraJobMap=new Map(((extraResult.data||[]) as ExtraJob[]).map(x=>[x.id,x]));
+      const ledgerExtraIds=[...new Set(allLedger.map(x=>x.extra_job_id).filter(Boolean) as string[])];
+      const ledgerExtras=ledgerExtraIds.length?await supabase.from("driver_extra_jobs").select("id,title,address").in("id",ledgerExtraIds):{data:[],error:null};
+      if(ledgerExtras.error)throw ledgerExtras.error;
+      const extraJobMap=new Map((ledgerExtras.data||[]).map((x:any)=>[x.id,x]));
       const detailedLedger=allLedger.map(x=>{
         if((x.description||"").includes("مشتری:")||(x.description||"").includes("مقصد:"))return x;
         if(x.order_id){const c=ledgerDetails.get(x.order_id);if(c)return {...x,description:(x.description||"کرایه سفارش")+" | مشتری: "+c.name+" | آدرس: "+c.address};}
