@@ -201,7 +201,6 @@ function SellerPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
   const [ledger,setLedger] = useState<Ledger[]>([]);
   const [busy,setBusy] = useState(false);
   const [showOrder,setShowOrder] = useState(false);
-  const [assigning,setAssigning] = useState<Order|null>(null);
   const [reviewing,setReviewing] = useState<Check|null>(null);
   const [settling,setSettling] = useState<Driver|null>(null);
   
@@ -293,8 +292,8 @@ function SellerPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
     <Nav tab={tab} setTab={setTab} items={nav}/>
     {tab==="home"&&<><div className="stats-grid"><Stat label="کل سفارش‌ها" value={orders.length}/><Stat label="در جریان" value={openOrders.length}/><Stat label="رانندگان فعال" value={drivers.length}/><Stat label="چک‌های منتظر بررسی" value={checks.filter(c=>c.status==="awaiting_seller").length}/></div>
       <SectionTitle title="آخرین سفارش‌ها" action={<button className="small-button" disabled={busy} onClick={load}><RefreshCw size={15}/> بروزرسانی</button>}/>
-      <OrderList orders={orders.slice(0,6)} onAssign={setAssigning} onEdit={setEditingOrder} onDelete={deleteOrder}/></>}
-    {tab==="orders"&&<><SectionTitle title="مدیریت سفارش‌ها" sub="ثبت سفارش جدید و ارجاع به راننده" action={<button className="primary-small" onClick={()=>setShowOrder(true)}><Plus size={16}/> ثبت سفارش</button>}/><OrderList orders={orders} onAssign={setAssigning} onEdit={setEditingOrder} onDelete={deleteOrder}/></>}
+      <OrderList orders={orders.slice(0,6)} onEdit={setEditingOrder} onDelete={deleteOrder}/></>}
+    {tab==="orders"&&<><SectionTitle title="مدیریت سفارش‌ها" sub="ثبت سفارش؛ مأموریت به‌صورت خودکار برای راننده اصلی ارسال می‌شود." action={<button className="primary-small" onClick={()=>setShowOrder(true)}><Plus size={16}/> ثبت سفارش</button>}/><OrderList orders={orders} onEdit={setEditingOrder} onDelete={deleteOrder}/></>}
     {tab==="checks"&&<><SectionTitle title="مدیریت چک‌های مشتریان" sub="چک‌های تأییدشده توسط راننده را بررسی کنید"/><div className="stack">{checks.map(c=><div className="data-card" key={c.id}><div className="card-top"><strong>سفارش #{c.order_id.slice(0,8)}</strong><Status value={c.status}/></div><p>{c.check_count.toLocaleString("fa-IR")} فقره چک · {money(c.total_amount_toman)}</p>{c.status==="awaiting_seller"&&c.driver_confirmed_at&&<button className="primary-small" onClick={()=>setReviewing(c)}>بررسی و تأیید چک</button>}{c.status==="awaiting_seller"&&!c.driver_confirmed_at&&<small className="negative">در انتظار تأیید راننده</small>}{c.seller_review_note&&<small>یادداشت: {c.seller_review_note}</small>}</div>)}{!checks.length&&<Empty text="هنوز چکی ثبت نشده است."/>}</div></>}
     {tab==="finance"&&<><SectionTitle title="دفتر مالی رانندگان" sub="مانده هر راننده و ثبت تسویه"/><div className="stack">{drivers.map(d=>{const rows=ledger.filter(x=>x.driver_id===d.id);const balance=rows.reduce((sum,x)=>sum+x.amount_toman,0);return <div className="data-card" key={d.id}><div className="card-top"><strong>{d.full_name}</strong><b className={balance<0?"negative":"positive"}>{money(balance)}</b></div><small>{d.phone||"شماره تماس ثبت نشده"}</small><button className="primary-small" disabled={balance<=0} onClick={()=>setSettling(d)}>ثبت تسویه</button></div>;})}{!drivers.length&&<Empty text="راننده فعالی وجود ندارد."/>}</div><SectionTitle title="آخرین تراکنش‌ها"/><div className="stack">{ledger.slice(0,40).map(x=><div className="data-card compact" key={x.id}><div className="card-top"><strong>{ledgerLabel(x.entry_type,x.description||"")}</strong><b className={x.amount_toman<0?"negative":"positive"}>{money(x.amount_toman)}</b></div><p>{x.description||"بدون توضیحات"}</p><small>{dateText(x.created_at)}</small></div>)}</div></>}
     {tab==="customers"&&<><SectionTitle title="مشتریان امروز" sub="فقط مشتریانی که امروز به فهرست اضافه شده‌اند"/><div className="stack">{customers.filter(c=>isTodayTehran(c.created_at)).map(c=>{const co=orders.filter(o=>o.customer_id===c.id);const cash=co.reduce((a,o)=>a+Number(o.customer_cash_balance_toman||0),0);const orderIds=co.map(o=>o.id);const checksTotal=checks.filter(ch=>orderIds.includes(ch.order_id)&&ch.status!=="approved").reduce((a,ch)=>a+Number(ch.total_amount_toman||0),0);return <div className="data-card compact" key={c.id}><strong>{c.full_name}</strong><p>{c.address}</p><small>{[c.phone,c.phone2].filter(Boolean).join(" · ")||"شماره تماس ثبت نشده"}</small><div className="card-grid"><span>مانده نقدی: {money(cash)}</span><span>چک‌ها: {money(checksTotal)}</span></div><div className="card-bottom"><button className="small-button" onClick={()=>setEditingCustomer(c)}>ویرایش</button><button className="danger-button" onClick={()=>archiveCustomer(c)}>بایگانی</button></div></div>;})}{!customers.some(c=>isTodayTehran(c.created_at))&&<Empty text="امروز مشتری جدیدی ثبت نشده است."/>}</div></>}
@@ -304,7 +303,6 @@ function SellerPanel({profile,tab,setTab,setError,setNotice}:{profile:Profile;ta
         {tab==="rates"&&<FreightRatePanel setError={setError} setNotice={setNotice}/>}
     {showRoundTrip&&<RoundTripModal drivers={drivers} onClose={()=>setShowRoundTrip(false)} onSubmit={createRoundTrip}/>}
     {showOrder&&<OrderModal customers={customers} drivers={drivers} onClose={()=>setShowOrder(false)} onDone={async()=>{setShowOrder(false);setNotice("سفارش با موفقیت ثبت شد.");await load();}} onError={setError}/>}
-    {assigning&&<AssignModal order={assigning} drivers={drivers} onClose={()=>setAssigning(null)} onAssign={assign}/>}
     {editingOrder&&<EditOrderModal order={editingOrder} customers={customers} onClose={()=>setEditingOrder(null)} onDone={async()=>{setEditingOrder(null);setNotice("اطلاعات سفارش اصلاح شد.");await load();}} onError={setError}/>}
     {editingCustomer&&<CustomerEditModal customer={editingCustomer} onClose={()=>setEditingCustomer(null)} onDone={async()=>{setEditingCustomer(null);setNotice("اطلاعات مشتری و شماره‌های تماس ذخیره شد.");await load();}} onError={setError}/>}
     {reviewing&&<ReviewModal check={reviewing} onClose={()=>setReviewing(null)} onSubmit={review}/>}
@@ -337,19 +335,20 @@ function CustomerEditModal({customer,onClose,onDone,onError}:{customer:Customer;
 
 function Stat({label,value}:{label:string;value:number}) {return <div className="stat-card"><span>{label}</span><strong>{value.toLocaleString("fa-IR")}</strong></div>;}
 function Status({value}:{value:string}) {return <span className={`status status-${value}`}>{statusFa[value]||value}</span>;}
-function OrderList({orders,onAssign,onEdit,onDelete}:{orders:Order[];onAssign:(o:Order)=>void;onEdit:(o:Order)=>void;onDelete:(o:Order)=>void}) {
+function OrderList({orders,onEdit,onDelete}:{orders:Order[];onEdit:(o:Order)=>void;onDelete:(o:Order)=>void}) {
   return <div className="stack">{orders.map(o=><div className="data-card" key={o.id}><div className="card-top"><strong>سفارش #{o.order_number.toLocaleString("fa-IR")}</strong><Status value={o.status}/></div>
     <div className="card-grid"><span>شناسه مشتری: {o.customer_id.slice(0,8)}</span><span>کرایه مشتری: {money(o.freight_toman)}</span><span>کرایه راننده: {money(o.driver_freight_toman)}</span><span>مانده نقدی: {money(o.customer_cash_balance_toman)}</span><span>چک: {money(o.checks_total_toman)}</span></div>
-    {o.seller_notes&&<p>{o.seller_notes}</p>}<div className="card-bottom"><small>{dateText(o.created_at)}</small><><button className="small-button" onClick={()=>onEdit(o)}>ویرایش سفارش</button>{o.status==="registered"&&<><button className="small-button" onClick={()=>onAssign(o)}>ارجاع به راننده <ChevronLeft size={15}/></button><button className="danger-button" onClick={()=>{if(window.confirm("سفارش ثبت‌شده حذف شود؟ این عملیات قابل بازگشت نیست."))onDelete(o);}}>حذف</button></>}</></div></div>)}
+    {o.seller_notes&&<p>{o.seller_notes}</p>}<div className="card-bottom"><small>{dateText(o.created_at)}</small><><button className="small-button" onClick={()=>onEdit(o)}>ویرایش سفارش</button>{o.status==="registered"&&<><button className="danger-button" onClick={()=>{if(window.confirm("سفارش ثبت‌شده حذف شود؟ این عملیات قابل بازگشت نیست."))onDelete(o);}}>حذف</button></>}</></div></div>)}
     {!orders.length&&<Empty text="سفارشی برای نمایش وجود ندارد."/>}</div>;
 }
 
 function OrderModal({customers,drivers,onClose,onDone,onError}:{customers:Customer[];drivers:Driver[];onClose:()=>void;onDone:()=>void;onError:(v:string)=>void}) {
   const [customerId,setCustomerId]=useState("");const [fullName,setFullName]=useState("");const [phone,setPhone]=useState("");const [phone2,setPhone2]=useState("");
   const [address,setAddress]=useState("");const [freight,setFreight]=useState("0");const [cash,setCash]=useState("0");
-  const [checksTotal,setChecksTotal]=useState("0");const [checksCount,setChecksCount]=useState("0");const [notes,setNotes]=useState("");const [driverId,setDriverId]=useState("");
+  const [checksTotal,setChecksTotal]=useState("0");const [checksCount,setChecksCount]=useState("0");const [notes,setNotes]=useState("");const [driverId,setDriverId]=useState(drivers.length===1?drivers[0].id:"");
   const [items,setItems]=useState<{name:string;quantity:string}[]>([{name:"",quantity:"1"}]);
   const [latitude,setLatitude]=useState<number|null>(null);const [longitude,setLongitude]=useState<number|null>(null);const [busy,setBusy]=useState(false);
+  useEffect(()=>{if(drivers.length===1)setDriverId(drivers[0].id);else setDriverId("");},[drivers]);
   function chooseCustomer(id:string){setCustomerId(id);const c=customers.find(x=>x.id===id);if(c){setFullName(c.full_name);setPhone(c.phone||"");setPhone2(c.phone2||"");setAddress(c.address);setLatitude(c.latitude??null);setLongitude(c.longitude??null);}else{setFullName("");setPhone("");setPhone2("");setAddress("");setLatitude(null);setLongitude(null);}}
   function setItem(index:number,key:"name"|"quantity",value:string){setItems(rows=>rows.map((x,i)=>i===index?{...x,[key]:value}:x));}
   async function savePhones(customer:string){
@@ -365,6 +364,7 @@ function OrderModal({customers,drivers,onClose,onDone,onError}:{customers:Custom
     if(items.some(x=>!Number.isInteger(Number(normalizeDigits(x.quantity)))||Number(normalizeDigits(x.quantity))<1)){onError("تعداد هر کالا باید عدد صحیح و حداقل ۱ باشد.");return;}
     if([freight,cash,checksTotal,checksCount].some(v=>!Number.isFinite(Number(normalizeDigits(v)))||Number(normalizeDigits(v))<0)){onError("مبالغ و تعداد چک نمی‌توانند منفی یا نامعتبر باشند.");return;}
     if((Number(normalizeDigits(checksTotal))>0)!==(Number(normalizeDigits(checksCount))>0)){onError("برای چک، هم مبلغ و هم تعداد را وارد کنید.");return;}
+    if(drivers.length!==1||!drivers[0]?.id){onError("برای ثبت سفارش باید دقیقاً یک راننده فعال در سامانه وجود داشته باشد.");return;}
     setBusy(true);
     try{
       if(customerId){const cu=await supabase.from("customers").update({full_name:fullName.trim(),address:address.trim(),latitude,longitude}).eq("id",customerId);if(cu.error)throw cu.error;await savePhones(customerId);}
@@ -374,7 +374,7 @@ function OrderModal({customers,drivers,onClose,onDone,onError}:{customers:Custom
         p_latitude:latitude,p_longitude:longitude,p_freight_toman:Number(normalizeDigits(freight||"0")),p_cash_balance_toman:Number(normalizeDigits(cash||"0")),
         p_checks_total_toman:Number(normalizeDigits(checksTotal||"0")),p_checks_count:Number(normalizeDigits(checksCount||"0")),p_seller_notes:notes.trim()||null,
         p_items:items.map(x=>({mattress_name:x.name.trim(),brand:null,size:null,quantity:Number(normalizeDigits(x.quantity)),weight:"medium",notes:null})),
-        p_driver_id:driverId||null
+        p_driver_id:drivers[0].id
       });
       if(error)throw error;
       if(customerId)await savePhones(customerId);
@@ -397,7 +397,7 @@ function OrderModal({customers,drivers,onClose,onDone,onError}:{customers:Custom
     <button type="button" className="secondary-button full" onClick={()=>setItems(rows=>[...rows,{name:"",quantity:"1"}])}><Plus size={16}/> افزودن کالا</button>
     <Field label="کرایه مشتری (تومان)" value={freight} set={setFreight} type="number"/><Field label="مانده نقدی مشتری (تومان)" value={cash} set={setCash} type="number"/>
     <Field label="مبلغ چک‌ها (تومان)" value={checksTotal} set={setChecksTotal} type="number"/><Field label="تعداد چک" value={checksCount} set={setChecksCount} type="number"/>
-    <label className="full">ارجاع مستقیم به راننده (اختیاری)<select value={driverId} onChange={e=>setDriverId(e.target.value)}><option value="">فعلاً ارجاع نشود</option>{drivers.map(d=><option key={d.id} value={d.id}>{d.full_name}</option>)}</select></label>
+    <div className="full detail-box">این سفارش پس از ثبت، به‌صورت خودکار برای راننده اصلی ({drivers.length===1?drivers[0].full_name:"راننده فعال"}) ارسال می‌شود.</div>
     <label className="full">توضیحات فروشنده<textarea value={notes} onChange={e=>setNotes(e.target.value)} rows={2}/></label>
     <div className="modal-actions full"><button type="button" className="secondary-button" onClick={onClose}>انصراف</button><button className="primary-button" disabled={busy}>{busy?"در حال ثبت…":"ثبت سفارش"}</button></div>
   </form></Modal>;
